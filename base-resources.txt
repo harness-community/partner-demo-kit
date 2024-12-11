@@ -35,17 +35,6 @@ harness account - video uses fresh harness account against a fresh gmail to ensu
       terraform init
       terraform plan -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan 
       terraform apply -auto-approve plan.tfplan
-    to reset
-      harness
-        remove the repo partner_demo_kit from harness using the harness ui > code repo module > manage repository, delete
-        remove the project Base Demo using the harness ui
-      locally
-        scrub out tf state file et al - I typically do a git clean -dxf
-      minikube
-        kubectl delete deployment frontend-deployment
-        kubectl delete service web-frontend-svc
-        kubectl delete deployment backend-deployment
-        kubectl delete service web-backend-svc
     covers
       connector k8s
       connector docker
@@ -62,3 +51,17 @@ harness account - video uses fresh harness account against a fresh gmail to ensu
   manual
     set repo to scan code
       harness ui > code repo module > manage repositor > security, set secret scanning to on and save
+
+to reset
+  harness
+    remove the repo partner_demo_kit from harness using the harness ui > code repo module > manage repository, delete
+    remove the project Base Demo using the harness ui
+  locally
+    scrub out tf state file et al - I typically do a git clean -dxf
+  dockerhub
+    remove repository dockerhubaccountid/harness-demo
+  minikube
+    kubectl delete deployment frontend-deployment
+    kubectl delete service web-frontend-svc
+    kubectl delete deployment backend-deployment
+    kubectl delete service web-backend-svc
