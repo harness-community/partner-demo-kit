@@ -349,7 +349,7 @@ resource "harness_platform_monitored_service" "backend_dev" {
                 enabled = true
               }
             }
-            query         = "avg(container_cpu_system_seconds_total{namespace=\"default\", container=\"backend\"})"
+            query         = "avg(container_cpu_system_seconds_total{namespace="default", pod!~".*canary.*", pod=~"backend-deployment.*"})"
             groupName     = "Infrastructure"
             isManualQuery = true
           }
@@ -404,7 +404,7 @@ resource "harness_platform_monitored_service" "backend_prod" {
                 enabled = true
               }
             }
-            query         = "avg(container_cpu_system_seconds_total{namespace=\"default\", container=\"backend\"})"
+            query         = "avg(container_cpu_system_seconds_total{namespace="default", pod!~".*canary.*", pod=~"backend-deployment.*"})"
             groupName     = "Infrastructure"
             isManualQuery = true
           }
