@@ -41,7 +41,7 @@ harness account - video uses fresh harness account against a fresh gmail to ensu
       terraform apply -auto-approve plan.tfplan
     to reset
       harness
-        remove the repo partner_base_demo from harness using the harness ui > code repo module > manage repository, delete
+        remove the repo partner_demo_kit from harness using the harness ui > code repo module > manage repository, delete
         remove the project Base Demo using the harness ui
       minikube
         remove frontend

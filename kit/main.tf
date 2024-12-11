@@ -29,8 +29,8 @@ resource "harness_platform_project" "base_demo" {
   color      = "#0063F7"
 }
 
-resource "harness_platform_repo" "partner_base_demo" {
-  identifier     = "partner_base_demo"
+resource "harness_platform_repo" "partner_demo_kit" {
+  identifier     = "partner_demo_kit"
   org_id         = var.org_id
   project_id     = harness_platform_project.base_demo.identifier
   default_branch = "main"
@@ -282,7 +282,7 @@ service:
               store:
                 type: HarnessCode
                 spec:
-                  repoName: partner_base_demo
+                  repoName: partner_demo_kit
                   gitFetchType: Branch
                   paths:
                     - harness-deploy/backend/manifests
