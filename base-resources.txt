@@ -25,7 +25,6 @@ harness account - video uses fresh harness account against a fresh gmail to ensu
     couple of helm commands described in the harness ui
   get account id
   get pat
-  create project Base Demo (gets you slug Base_Demo)
   terraform
     preparation
       cd into kit such that ./main.tf exists
@@ -57,8 +56,3 @@ harness account - video uses fresh harness account against a fresh gmail to ensu
   manual
     set repo to scan code
       harness ui > code repo module > manage repositor > security, set secret scanning to on and save
-    two monitored services
-
-harness elements created during the demo
-  pipeline
-  service frontend
