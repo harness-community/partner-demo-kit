@@ -35,7 +35,7 @@ Harness offers robust and versatile solutions tailored to meet the stringent dem
 >   - *Uncheck the other scanners*
 > - **Container Information**
 >   - Type: `Docker V2`
->   - Image: <pre><code>edslatt/harness-demo:demo-base-<+pipeline.sequenceId></pre></code>
+>   - Image: <pre><code>dockerhubaccountid/harness-demo:demo-base-<+pipeline.sequenceId></pre></code>
 > - After completing configuration select **Add Scanners**
 >
 > 5) Rename the step to <pre>`Aqua Trivy`</pre>

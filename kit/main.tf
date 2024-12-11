@@ -297,7 +297,7 @@ service:
           sources:
             - spec:
                 connectorRef: ${harness_platform_connector_docker.workshopdocker.identifier}
-                imagePath: edslatt/harness-demo
+                imagePath: dockerhubaccountid/harness-demo
                 tag: backend-latest
                 digest: ""
               identifier: backend

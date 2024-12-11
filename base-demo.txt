@@ -17,7 +17,7 @@
   add templated step "Compile"
   add build and push docker image type step "Push to Dockerhub"
     connector: workshop-docker
-    docker repo: edslatt/harness-demo
+    docker repo: dockerhubaccountid/harness-demo
       (instruqt uses seworkshop/harness-workshop)
     tags: demo-base-<+pipeline.sequenceId>
       (instruqt uses <+variable.username>-<+pipeline.sequenceId>)
@@ -40,7 +40,7 @@
         repo type: docker registry
         docker registry connector: Workshop Docker
         source id: frontend
-        image path: edslatt/harness-demo
+        image path: dockerhubaccountid/harness-demo
           (instruqt seworkshop/harness-workshop)
         tag: demo-base-<+pipeline.sequenceId>
           (instruqt <+variable.username>-<+pipeline.sequenceId>)
