@@ -17,11 +17,13 @@ docker hub account and registry
   get pat (account settings > personal access tokens)
   build and push backend-latest
     cd into backend such that ./Dockerfile exists
-    useful to replace all dockerhubaccountid/harness-demo to your docker hub account id
+    use replace all to change dockerhubaccountid to your docker hub account id
+      required for main.tf and convenient for demo copy paste
     docker build -t dockerhubaccountid/harness-demo:backend-latest .
+    docker login -u dockerhubaccountid
     docker push dockerhubaccountid/harness-demo:backend-latest
 harness account - video uses fresh harness account against a fresh gmail to ensure representative experience
-  turn on CI and CD
+  turn on CD, CI and Code Repo
   install delegate at account level
     couple of helm commands described in the harness ui
   get account id

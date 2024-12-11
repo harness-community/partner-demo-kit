@@ -23,7 +23,7 @@
       (instruqt uses <+variable.username>-<+pipeline.sequenceId>)
     dockerfile: /harness/frontend-app/harness-webapp/Dockerfile
     context: /harness/frontend-app/harness-webapp
-  run the pipeline and see image land in https://hub.docker.com/r/seworkshop/harness-workshop/tags
+  run the pipeline and see image land in https://hub.docker.com/r/dockerhubaccountid/harness-demo/tags
 
 3-cd-frontend
   add k8s type deployent stage "Frontend - Deployment"
@@ -33,7 +33,7 @@
         type: k8s
         source: code
         identifier: templates
-        repo: harnessrepo, main
+        repo: partner_demo_kit, main
         folder: harness-deploy/frontend/manifests
         values: harness-deploy/frontend/values.yaml
       artifact source
