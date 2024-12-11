@@ -1,0 +1,83 @@
+0-login - login to harness
+
+1-coderepo - can't push a secret
+  browse into the harness code repo module
+  generate a clone credential and bake it into your environment
+  add something sensitive to your git repo that should not be allowed on the server
+  try to push and see that's its blocked
+    TOKEN="02290a2a-7f5a-4836-8745-d4d797e475d0" in backend/entrypoint.sh
+
+2-build
+  create pipeline "Workshop Build and Deploy" with build type stage "Build" against harness cloud and our repo
+    when setting up agasint harness cloud be sure to choose architecture consistent with your compute
+      arm64 for video since running on mbp m1
+  add test intelligence type step "Test Intelligence"
+    cd ./python-tests
+    pytest  
+  add templated step "Compile"
+  add build and push docker image type step "Push to Dockerhub"
+    connector: workshop-docker
+    docker repo: edslatt/harness-demo
+      (instruqt uses seworkshop/harness-workshop)
+    tags: demo-base-<+pipeline.sequenceId>
+      (instruqt uses <+variable.username>-<+pipeline.sequenceId>)
+    dockerfile: /harness/frontend-app/harness-webapp/Dockerfile
+    context: /harness/frontend-app/harness-webapp
+  run the pipeline and see image land in https://hub.docker.com/r/seworkshop/harness-workshop/tags
+
+3-cd-frontend
+  add k8s type deployent stage "Frontend - Deployment"
+    create service "frontend"
+      k8s
+      manifest
+        type: k8s
+        source: code
+        identifier: templates
+        repo: harnessrepo, main
+        folder: harness-deploy/frontend/manifests
+        values: harness-deploy/frontend/values.yaml
+      artifact source
+        repo type: docker registry
+        docker registry connector: Workshop Docker
+        source id: frontend
+        image path: edslatt/harness-demo
+          (instruqt seworkshop/harness-workshop)
+        tag: demo-base-<+pipeline.sequenceId>
+          (instruqt <+variable.username>-<+pipeline.sequenceId>)
+    environment: dev
+    infrastructure: k8s dev
+    rolling
+  run it and see it work
+    see components in minikube
+      kubectl get pods -A | grep deployment
+      kubectl get services -A | grep svc
+    see the service has an external ip assigned
+      minikube tunnel must be running
+    browse to localhost:8080
+
+4-cd-backend
+  add k8s type deployment stage "Backend - Deployment"
+    backend service, propagate dev env and infra, canary
+  run it and see it work
+    see components in minikube
+      kubectl get pods -A | grep deployment
+      kubectl get services -A | grep svc
+    see the service has an external ip assigned
+      minikube tunnel must be running
+    browse to localhost:8080
+      click the Distribution Test > Start button and then the play button
+        see the graph build out
+
+5-security - unavailable until promoted to licensed partner org
+
+6-cv
+  add verify step in backend deployment stage after canary deployment
+    "Verify", canary, low, 5mins
+  run the pipeline
+  browse the hello world app
+    keep clicking "check release" trying to spot the "carary"
+      the "canary" is a yellow cartoon graphic that gets served by the carary pod
+    click the "start" button on the distribution panel and then "play"
+  go back to the harness ui and view the veriy data
+
+7-opa - unavailable until promoted to licensed partner org

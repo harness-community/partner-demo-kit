@@ -1,0 +1,71 @@
+TODO
+  how to tune all the yaml in this repo for the user specific
+    like container name or whatever
+    probably have to move to JEXL and register project variables
+    get it to go with hardwired values first
+
+compute - video uses mbp m1
+  git
+  vs code with md preview plugin
+  this demo kit repo
+    base-resources.txt - terse list of required resources (this file)
+    base-demo.txt - terse demo click through guidance
+    labs markdown - instructions for the base demo
+  docker (colima)
+  helm
+  terraform
+  minikube
+    prometheus
+      kubectl create namespace monitoring
+      kubectl -n monitoring apply -f ./prometheus.yml
+docker hub account and registry
+  create a docker hub account if you don't have one
+  create repository in your docker hub account named harness-demo
+  build and push backend-latest
+    TODO add commands here including directory to cd into
+harness account - video uses fresh harness account against a fresh gmail to ensure representative experience
+  turn on CI and CD
+  install delegate at account level
+    couple of helm commands described in the harness ui
+  get account id
+  get pat
+  create project Base Demo (gets you slug Base_Demo)
+  terraform
+    preparation
+      cd into kit such that ./main.tf exists
+      update se-parms.tfvars with your values
+      set env var DEMO_BASE_PAT
+    commands
+      terraform init
+      terraform plan -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan 
+      terraform apply -auto-approve plan.tfplan
+    to reset
+      harness
+        remove the repo partner_base_demo from harness using the harness ui > code repo module > manage repository, delete
+        remove the project Base Demo using the harness ui
+      minikube
+        remove frontend
+          kubectl TODO
+        remove backend
+          kubectl TODO
+    covers
+      connector k8s
+      connector docker
+      connector prometheus
+      secret docker password
+      secret docker username
+      template compile application
+      environment dev
+      environment prod
+      infrastructure k8s dev
+      service backend
+      monitored service backend_dev
+      monitored service frontend_dev
+  manual
+    set repo to scan code
+      harness ui > code repo module > manage repositor > security, set secret scanning to on and save
+    two monitored services
+
+harness elements created during the demo
+  pipeline
+  service frontend

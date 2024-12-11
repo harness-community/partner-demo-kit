@@ -1,0 +1,309 @@
+<?xml version="1.0" ?>
+<detailedreport xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="https://www.veracode.com/schema/reports/export/1.0" xsi:schemaLocation="https://www.veracode.com/schema/reports/export/1.0 https://analysiscenter.veracode.com/resource/detailedreport.xsd" report_format_version="1.5">
+   <severity level="8">
+      <category categoryname="ssl">
+         <desc>
+            <para text="A SSL/TLS version offered by the server is outdated. The deprecated versions contain weak implementations that cannot be considered as secure anymore. Please use TLS 1.2 or TLS 1.3 instead."/>
+         </desc>
+         <recommendations>
+            <para text="The webserver is using a deprecated SSL/TLS version and needs to be updated. The webserver needs to be configured to use strong and trusted certificates. In addition they need to be configured to use the newest version of SSL and TLS as well as strong cipher suites. More details on how to configure these certificates can be found in the knowledge database (see Recommendations)"/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="TLS 1.0 is offered by the server. This version of TLS is deprecated. You should use TLS 1.2 or TLS 1.3"/>
+            </description>
+            <staticflaws>
+               <flaw severity="8" description="TLS 1.0 is offered by the server. This version of TLS is deprecated. You should use TLS 1.2 or TLS 1.3"/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+   <severity level="8">
+      <category categoryname="ssl">
+         <desc>
+            <para text="A SSL/TLS version offered by the server is outdated. The deprecated versions contain weak implementations that cannot be considered as secure anymore. Please use TLS 1.2 or TLS 1.3 instead."/>
+         </desc>
+         <recommendations>
+            <para text="The webserver is using a deprecated SSL/TLS version and needs to be updated. The webserver needs to be configured to use strong and trusted certificates. In addition they need to be configured to use the newest version of SSL and TLS as well as strong cipher suites. More details on how to configure these certificates can be found in the knowledge database (see Recommendations)"/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="TLS 1.1 is offered by the server. This version of TLS is deprecated. You should use TLS 1.2 or TLS 1.3"/>
+            </description>
+            <staticflaws>
+               <flaw severity="8" description="TLS 1.1 is offered by the server. This version of TLS is deprecated. You should use TLS 1.2 or TLS 1.3"/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+   <severity level="7">
+      <category categoryname="ssl">
+         <desc>
+            <para text="The server is configured to support 3DES and IDEA Ciphers like &quot;3DES:IDEA&quot;. This means, that an attacker can make use of an insecure SSL/TLS connection."/>
+         </desc>
+         <recommendations>
+            <para text="The list of supported HTTPS ciphers includes insecure ciphers. This means, that an attacker can make use of in insecure SSL/TLS connection. In the SSL/TLS configuration, the allowed ciphers and their order should be set to match secure values. More details on how to set these values can be found in the knowledge database (see Recommendations)"/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="Cipher suits based on DES (Data Encryption Standard) and IDEA (International Data Encryption Algorithm) are not recommended for general use in TLS. In TLS 1.2 and TLS 1.3 DES and IDEA are removed. You should use TLS 1.2 or TLS 1.3."/>
+            </description>
+            <staticflaws>
+               <flaw severity="7" description="Cipher suits based on DES (Data Encryption Standard) and IDEA (International Data Encryption Algorithm) are not recommended for general use in TLS. In TLS 1.2 and TLS 1.3 DES and IDEA are removed. You should use TLS 1.2 or TLS 1.3."/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+   <severity level="6">
+      <category categoryname="ssl">
+         <desc>
+            <para text="The SSL/TLS configuration supports weak cipher suites which should not be used anymore."/>
+         </desc>
+         <recommendations>
+            <para text="Disable all weak SSL ciphers in your SSL configuration file."/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="The cipher suite TLS_RSA_WITH_AES_256_CBC_SHA is weak."/>
+            </description>
+            <staticflaws>
+               <flaw severity="6" description="The cipher suite TLS_RSA_WITH_AES_256_CBC_SHA is weak."/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+   <severity level="6">
+      <category categoryname="ssl">
+         <desc>
+            <para text="The SSL/TLS configuration supports weak cipher suites which should not be used anymore."/>
+         </desc>
+         <recommendations>
+            <para text="Disable all weak SSL ciphers in your SSL configuration file."/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="The cipher suite TLS_RSA_WITH_3DES_EDE_CBC_SHA is weak."/>
+            </description>
+            <staticflaws>
+               <flaw severity="6" description="The cipher suite TLS_RSA_WITH_3DES_EDE_CBC_SHA is weak."/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+   <severity level="6">
+      <category categoryname="ssl">
+         <desc>
+            <para text="The SSL/TLS configuration supports weak cipher suites which should not be used anymore."/>
+         </desc>
+         <recommendations>
+            <para text="Disable all weak SSL ciphers in your SSL configuration file."/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="The cipher suite TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA is weak."/>
+            </description>
+            <staticflaws>
+               <flaw severity="6" description="The cipher suite TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA is weak."/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+   <severity level="6">
+      <category categoryname="ssl">
+         <desc>
+            <para text="The SSL/TLS configuration supports weak cipher suites which should not be used anymore."/>
+         </desc>
+         <recommendations>
+            <para text="Disable all weak SSL ciphers in your SSL configuration file."/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="The cipher suite TLS_RSA_WITH_AES_128_CBC_SHA is weak."/>
+            </description>
+            <staticflaws>
+               <flaw severity="6" description="The cipher suite TLS_RSA_WITH_AES_128_CBC_SHA is weak."/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+   <severity level="6">
+      <category categoryname="ssl">
+         <desc>
+            <para text="The SSL/TLS configuration supports weak cipher suites which should not be used anymore."/>
+         </desc>
+         <recommendations>
+            <para text="Disable all weak SSL ciphers in your SSL configuration file."/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="The cipher suite TLS_RSA_WITH_AES_256_GCM_SHA384 is weak."/>
+            </description>
+            <staticflaws>
+               <flaw severity="6" description="The cipher suite TLS_RSA_WITH_AES_256_GCM_SHA384 is weak."/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+   <severity level="6">
+      <category categoryname="ssl">
+         <desc>
+            <para text="The SSL/TLS configuration supports weak cipher suites which should not be used anymore."/>
+         </desc>
+         <recommendations>
+            <para text="Disable all weak SSL ciphers in your SSL configuration file."/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="The cipher suite TLS_RSA_WITH_AES_128_GCM_SHA256 is weak."/>
+            </description>
+            <staticflaws>
+               <flaw severity="6" description="The cipher suite TLS_RSA_WITH_AES_128_GCM_SHA256 is weak."/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+   <severity level="6">
+      <category categoryname="ssl">
+         <desc>
+            <para text="The SSL/TLS configuration supports weak cipher suites which should not be used anymore."/>
+         </desc>
+         <recommendations>
+            <para text="Disable all weak SSL ciphers in your SSL configuration file."/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="The cipher suite TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA is weak."/>
+            </description>
+            <staticflaws>
+               <flaw severity="6" description="The cipher suite TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA is weak."/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+   <severity level="5">
+      <category categoryname="ssl">
+         <desc>
+            <para text="The server uses short block sizes, which makes it vulnerable to hit the same hash for multiple inputs. By observing the data for a longer period of time, an attacker can recover secure HTTP cookies."/>
+         </desc>
+         <recommendations>
+            <para text="SWEET32 attacks can be prevented by using cipher suites with large block sizes. More details on what block sizes are considered large enough can be found in the knowledge database (see Recommendations)"/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="64 bit block ciphers are used which are vulnerable to SWEET32 birthday attack. 3DES ciphers should be disabled."/>
+            </description>
+            <staticflaws>
+               <flaw severity="5" description="64 bit block ciphers are used which are vulnerable to SWEET32 birthday attack. 3DES ciphers should be disabled."/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+   <severity level="4">
+      <category categoryname="ssl">
+         <desc>
+            <para text="The webserver is configured to allow connections encrypted with TLS V1 in Cipher Block Chaining Mode (CBC). Connections using this settings contain predictable information that allow an attacker to break the encryption using the BEAST attack."/>
+         </desc>
+         <recommendations>
+            <para text="The webserver needs to be configured to use strong and trusted certificates. In addition they need to be configured to use the newest version of SSL and TLS as well as strong cipher suites. More details on how to configure these certificates can be found in the knowledge database (see Recommendations)"/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="BEAST TLS1: The BEAST attack leverages weakness in the cipher block chaining (CBC) which allows man in the middle attacks."/>
+            </description>
+            <staticflaws>
+               <flaw severity="4" description="BEAST TLS1: The BEAST attack leverages weakness in the cipher block chaining (CBC) which allows man in the middle attacks."/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+   <severity level="4">
+      <category categoryname="ssl">
+         <desc>
+            <para text="The server is vulnerable for BEAST (Browser Exploit Against SSL/TLS) attacks. By using weaknesses in cipher block chaining, an attacker can use a Man-In-The-Middle attacks to decrypt and obtain authentication tokens."/>
+         </desc>
+         <recommendations>
+            <para text="BEAST attacks can be prevented by ensuring, that neither SSLv3 nor TLSv1 are used. More details on how to fix this problem can be found in the knowledge database (see Recommendations)"/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="VULNERABLE -- but also supports higher protocols  TLSv1.1 TLSv1.2 (likely mitigated)"/>
+            </description>
+            <staticflaws>
+               <flaw severity="4" description="VULNERABLE -- but also supports higher protocols  TLSv1.1 TLSv1.2 (likely mitigated)"/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+   <severity level="3">
+      <category categoryname="ssl">
+         <desc>
+            <para text="The server is configured to support average Ciphers like SEED + 128+256 Bit CBC ciphers (AES, CAMELLIA and ARIA). This means, that an attacker can make use of an insecure SSL/TLS connection."/>
+         </desc>
+         <recommendations>
+            <para text="The list of supported HTTPS ciphers includes insecure ciphers. This means, that an attacker can make use of in insecure SSL/TLS connection. In the SSL/TLS configuration, the allowed ciphers and their order should be set to match secure values. More details on how to set these values can be found in the knowledge database (see Recommendations)"/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="The server is configured to use average ciphers like SEED + 128+256 Bit CBC ciphers (AES, CAMELLIA and ARIA) which are deprecated"/>
+            </description>
+            <staticflaws>
+               <flaw severity="3" description="The server is configured to use average ciphers like SEED + 128+256 Bit CBC ciphers (AES, CAMELLIA and ARIA) which are deprecated"/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+   <severity level="2">
+      <category categoryname="ssl">
+         <desc>
+            <para text="OCSP Stapling is disabled on your server. Therefore, your certificate authority might track which users visit your site."/>
+         </desc>
+         <recommendations>
+            <para text="OSCP stapling can be enabled in the servers configuration (apache/nginx). For Let's Encrypt Certificates OCSP stapling can be activated during the creation of the certificate by adding the &quot;--staple-oscp&quot; parameter. More details on how to fix this problem can be found in the knowledge database (see Recommendations)"/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="OCSP_stapling is not offered by the server."/>
+            </description>
+            <staticflaws>
+               <flaw severity="2" description="OCSP_stapling is not offered by the server."/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+   <severity level="0">
+      <category categoryname="portscan">
+         <desc>
+            <para text="Unneeded open ports on the webserver opens a large attack surface to a malicious user. This can be used to find unmaintained and possibly vulnerable network services that can be targeted."/>
+         </desc>
+         <recommendations>
+            <para text="Unnecessarily open ports can be closed by setting up a firewall and block connections to all ports except of those that are needed by the server. Furthermore services that are not needed should be uninstalled."/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="Found open port &quot;443/tcp&quot;"/>
+            </description>
+            <staticflaws>
+               <flaw severity="0" description="Found open port &quot;443/tcp&quot;"/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+   <severity level="0">
+      <category categoryname="portscan">
+         <desc>
+            <para text="Unneeded open ports on the webserver opens a large attack surface to a malicious user. This can be used to find unmaintained and possibly vulnerable network services that can be targeted."/>
+         </desc>
+         <recommendations>
+            <para text="Unnecessarily open ports can be closed by setting up a firewall and block connections to all ports except of those that are needed by the server. Furthermore services that are not needed should be uninstalled."/>
+         </recommendations>
+         <cwe cweid="78" cwename="Improper Neutralization" pcirelated="true">
+            <description>
+               <text text="Found open port &quot;80/tcp&quot;"/>
+            </description>
+            <staticflaws>
+               <flaw severity="0" description="Found open port &quot;80/tcp&quot;"/>
+            </staticflaws>
+         </cwe>
+      </category>
+   </severity>
+</detailedreport>

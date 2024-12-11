@@ -1,0 +1,15 @@
+name: <+service.name>
+replicas: 5
+image: <+artifact.image>
+dockercfg: <+artifact.imagePullSecret>
+namespace: <+infra.namespace>
+serviceType: LoadBalancer
+servicePort: 8081
+serviceTargetPort: 8000
+env:
+  config:
+    APPLICATION_VERSION: v1.<+pipeline.sequenceId>
+    SERVICE_NAME: <+service.name>
+    LAST_EXECUTION_ID: <+pipeline.executionId>
+    HARNESS_BUILD: <+pipeline.sequenceId>
+    ARTIFACT_VERSION: <+artifact.image>
