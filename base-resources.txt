@@ -42,7 +42,10 @@ harness account - video uses fresh harness account against a fresh gmail to ensu
       locally
         scrub out tf state file et al - I typically do a git clean -dxf
       minikube
-        use kubectl commands to remove frontend and backend deployments and services
+        kubectl delete deployment frontend-deployment
+        kubectl delete service web-frontend-svc
+        kubectl delete deployment backend-deployment
+        kubectl delete service web-backend-svc
     covers
       connector k8s
       connector docker
