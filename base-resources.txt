@@ -1,28 +1,24 @@
-TODO
-  how to tune all the yaml in this repo for the user specific
-    like container name or whatever
-    probably have to move to JEXL and register project variables
-    get it to go with hardwired values first
-
 compute - video uses mbp m1
-  git
-  vs code with md preview plugin
-  this demo kit repo
-    base-resources.txt - terse list of required resources (this file)
-    base-demo.txt - terse demo click through guidance
-    labs markdown - instructions for the base demo
-  docker (colima)
-  helm
-  terraform
-  minikube
+  vs code with markdown preview plugin (Markdown All in One)
+  git --version
+  this repo (partner-demo-kit)
+  docker -version
+  minikube version
+    minikube addons enable metrics-server
     prometheus
+      cd into kit such that ./prometheus.yml exists
       kubectl create namespace monitoring
       kubectl -n monitoring apply -f ./prometheus.yml
+  helm version
+  terraform -version
 docker hub account and registry
   create a docker hub account if you don't have one
   create repository in your docker hub account named harness-demo
+  get pat (account settings > personal access tokens)
   build and push backend-latest
-    TODO add commands here including directory to cd into
+    cd into backend such that ./Dockerfile exists
+    docker build -t edslatt/harness-demo:backend-latest .
+    docker push edslatt/harness-demo:backend-latest
 harness account - video uses fresh harness account against a fresh gmail to ensure representative experience
   turn on CI and CD
   install delegate at account level
@@ -44,10 +40,7 @@ harness account - video uses fresh harness account against a fresh gmail to ensu
         remove the repo partner_demo_kit from harness using the harness ui > code repo module > manage repository, delete
         remove the project Base Demo using the harness ui
       minikube
-        remove frontend
-          kubectl TODO
-        remove backend
-          kubectl TODO
+        use kubectl commands to remove frontend and backend deployments and services
     covers
       connector k8s
       connector docker
