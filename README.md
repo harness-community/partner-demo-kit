@@ -3,7 +3,7 @@
 ## Overview
 This repository contains everything needed to deliver compelling Harness.io demonstrations using local resources. Built from our Unscripted 2024 workshop materials, this kit enables partners to quickly set up and customize Harness.io demos without requiring complex cloud infrastructure or specialized environments.
 
-[![Partner Demo Kit Video](images/partner-demo-kit-video.png)](https://drive.google.com/file/d/1EHRLn4xmMpSOJ8lxKsy5si8CUnjwruZU/view?usp=sharing)
+[![Partner Demo Kit Video](images/partner-demo-kit-video.png)](https://www.youtube.com/watch?v=OgUyeZVYQeg)
 
 ## Key Benefits
 - **Minimal Prerequisites**: Runs on standard developer workstation using common tools
@@ -26,7 +26,7 @@ This repository contains everything needed to deliver compelling Harness.io demo
 1. Clone this repository
 2. Follow the setup instructions in `base-resources.txt`
 3. Review the demonstration guide in `base-demo.txt`
-4. Watch the accompanying [walkthrough video](https://drive.google.com/file/d/1EHRLn4xmMpSOJ8lxKsy5si8CUnjwruZU/view?usp=sharing)
+4. Watch the accompanying [walkthrough video](https://www.youtube.com/watch?v=OgUyeZVYQeg)
 
 ## Directory Structure
 ```
