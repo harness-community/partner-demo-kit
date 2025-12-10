@@ -62,6 +62,51 @@ cd partner-demo-kit
 - `~/projects/partner-demo-kit`
 - `~/Documents/partner-demo-kit`
 
+## Automated Setup (Recommended)
+
+For a faster setup experience, use the provided automation scripts:
+
+### Quick Start with Scripts
+
+```bash
+# Make scripts executable (first time only)
+chmod +x start-demo.sh stop-demo.sh
+
+# Start all local infrastructure
+./start-demo.sh
+
+# The script will:
+# - Detect and start your Kubernetes cluster (minikube or Rancher Desktop)
+# - Deploy Prometheus for monitoring
+# - Build and push the backend Docker image
+# - Verify everything is running
+```
+
+**Script Options:**
+- `./start-demo.sh --skip-docker-build` - Skip building/pushing Docker images
+
+**When finished with the demo:**
+```bash
+# Clean up deployed applications
+./stop-demo.sh
+
+# Full cleanup (including Prometheus and stop cluster)
+./stop-demo.sh --full-cleanup
+```
+
+**Shutdown Script Options:**
+- `./stop-demo.sh --delete-prometheus` - Also remove Prometheus
+- `./stop-demo.sh --stop-cluster` - Stop Kubernetes cluster (minikube only)
+- `./stop-demo.sh --full-cleanup` - Complete cleanup
+
+> **Note**: After running `start-demo.sh`, proceed to Step 6 (Configure Terraform Variables) below to complete the Harness setup.
+
+---
+
+## Manual Setup
+
+If you prefer manual control or need to troubleshoot, follow these detailed steps:
+
 ### Step 2: Set Up Kubernetes
 
 **Option A: Rancher Desktop (Recommended)**
@@ -226,7 +271,7 @@ terraform apply -auto-approve plan.tfplan
 
 ### Step 9: Run the Demo
 
-Follow the step-by-step demo guide in [base-demo.txt](base-demo.txt) which walks through:
+Follow the step-by-step lab guides in the `markdown/` directory which walk through:
 
 1. **Secret Scanning Demo**: Try to push a secret and see it blocked
 2. **Build Pipeline**: Create CI pipeline with test intelligence
@@ -244,6 +289,8 @@ Follow the step-by-step demo guide in [base-demo.txt](base-demo.txt) which walks
 .
 ├── README.md              # Complete setup and demo guide
 ├── CLAUDE.md              # Instructions for Claude Code AI assistant
+├── start-demo.sh          # Automated startup script for local infrastructure
+├── stop-demo.sh           # Automated shutdown script for cleanup
 ├── kit/                   # Terraform Infrastructure as Code
 │   ├── main.tf            # Main Terraform configuration
 │   ├── se-parms.tfvars    # Your configuration variables
@@ -337,9 +384,9 @@ kubectl delete service web-backend-svc
 ## Resources & Support
 
 - **Video Walkthrough**: [Watch on YouTube](https://www.youtube.com/watch?v=OgUyeZVYQeg)
-- **Detailed Setup Guide**: [base-resources.txt](base-resources.txt)
-- **Demo Execution Guide**: [base-demo.txt](base-demo.txt)
+- **Lab Guides**: See [markdown/](markdown/) directory for step-by-step instructions
 - **Harness Documentation**: [docs.harness.io](https://docs.harness.io)
+- **Automation Scripts**: [start-demo.sh](start-demo.sh) and [stop-demo.sh](stop-demo.sh)
 
 For questions or assistance:
 - Contact your Harness Partner Manager
