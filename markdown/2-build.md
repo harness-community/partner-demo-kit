@@ -3,7 +3,7 @@
 > **Important**: All activities in the **"Base Demo"** project
 
 ## Overview
-This lab walks through creating a complete CI pipeline with test intelligence, compilation, and Docker image building. You'll see how Harness Cloud provides instant, autoscaling build infrastructure without any setup.
+This lab walks through creating a complete CI pipeline with test intelligence, compilation, and Docker image building. You'll configure build infrastructure and see how Harness optimizes your CI/CD workflows.
 
 ## Prerequisites
 - Harness account with CI module enabled
@@ -30,20 +30,46 @@ This lab walks through creating a complete CI pipeline with test intelligence, c
    - **Repository Name**: `partner_demo_kit` (the Harness Code repository created by Terraform)
 4. Click **Set Up Stage**
 
-## Step 3: Configure Infrastructure (Harness Cloud)
+## Step 3: Configure Build Infrastructure
+
+You have several options for build infrastructure. Choose the one that best fits your needs:
+
+### Option A: Harness Cloud (Recommended for Verified Accounts)
+
+> **Important**: Harness Cloud is available for verified Harness accounts. If you're using a new or free-tier account, you may need to use Option B (Kubernetes) instead.
 
 1. On the **Infrastructure** tab
 2. Select **Harness Cloud**
-3. Click **Continue**
+3. Choose the architecture that matches your development environment:
+   - **arm64** - If using Apple Silicon (M1/M2/M3)
+   - **amd64** - If using Intel processors
+4. Click **Continue**
 
-> **Important**: Choose the architecture that matches your computer:
-> - **arm64** - If using Apple Silicon (M1/M2/M3)
-> - **amd64** - If using Intel processors
+**Benefits of Harness Cloud**:
+- Zero configuration required
+- Autoscaling build environment
+- Fastest bare-metal hardware available
+- No infrastructure management
+- Dramatically less expensive than on-premise solutions
 
-> **Note**: With zero configuration (just one click!), you've set up an autoscaling build environment in the cloud that:
-> - Requires no management
-> - Uses the fastest bare-metal hardware available
-> - Is dramatically less expensive than on-premise solutions
+### Option B: Kubernetes Build Farm (Alternative)
+
+If Harness Cloud is not available, you can use your local Kubernetes cluster:
+
+1. On the **Infrastructure** tab
+2. Select **Kubernetes**
+3. Configure:
+   - **Connector**: `workshop_k8s` (created by Terraform)
+   - **Namespace**: `harness-delegate-ng` (or your delegate namespace)
+4. Click **Continue**
+
+**Benefits of Kubernetes Build Farm**:
+- Use existing Kubernetes infrastructure
+- Full control over build environment
+- Works with any Kubernetes cluster (minikube, Rancher Desktop, cloud providers)
+- No external dependencies
+
+> **Note**: For this demo, either option will work. Harness Cloud provides a better experience but requires account verification.
 
 ## Step 4: Add Test Intelligence Step
 
@@ -63,6 +89,8 @@ This lab walks through creating a complete CI pipeline with test intelligence, c
 > - Faster builds
 > - Shorter feedback loops
 > - Significant cost savings
+>
+> After the first full test run, Test Intelligence will automatically detect which tests need to run based on your code changes.
 
 ## Step 5: Add Compile Step (Using Template)
 
@@ -73,7 +101,13 @@ This lab walks through creating a complete CI pipeline with test intelligence, c
    - **Name**: `Compile`
 5. Click **Apply Changes**
 
-> This template was created by Terraform and standardizes the frontend compilation process across all builds.
+> **About Templates**:
+> This step uses a pre-configured template created by Terraform. Templates allow platform teams to standardize build processes across the organization, ensuring consistency and best practices.
+>
+> The "Compile Application" template:
+> - Installs Node.js dependencies
+> - Builds the Angular frontend application
+> - Produces production-ready static assets
 
 ## Step 6: Add Docker Build and Push Step
 
@@ -92,7 +126,25 @@ This lab walks through creating a complete CI pipeline with test intelligence, c
      - **Context**: `/harness/frontend-app/harness-webapp`
 4. Click **Apply Changes**
 
-## Step 7: Save and Run the Pipeline
+> **Expression Syntax**: `<+pipeline.sequenceId>` is a Harness expression that provides the pipeline execution number. This ensures each build creates a uniquely tagged Docker image.
+
+## Step 7: (Optional) Enable Cache Intelligence
+
+If you're using **Harness Cloud** for builds, you can enable Cache Intelligence to speed up subsequent builds:
+
+1. Return to the **Build** stage **Infrastructure** tab
+2. In the Harness Cloud configuration, expand **Advanced**
+3. Toggle **Enable Cache Intelligence** to ON
+4. Click **Apply Changes**
+
+> **What is Cache Intelligence?**
+> Cache Intelligence automatically caches build dependencies and artifacts between pipeline runs:
+> - Speeds up builds by 40-60% on average
+> - No configuration required - works automatically
+> - Caches Docker layers, package manager dependencies, and build artifacts
+> - Only available with Harness Cloud
+
+## Step 8: Save and Run the Pipeline
 
 1. Click **Save** in the top right
 2. Click **Run**
@@ -106,6 +158,8 @@ Watch the pipeline execute:
 - ✅ **Compile** - Builds the Angular frontend
 - ✅ **Push to Dockerhub** - Builds and pushes the Docker image
 
+> **First Run**: The first execution will run all tests. Subsequent runs will use Test Intelligence to run only relevant tests based on code changes.
+
 ## Verify the Results
 
 1. **Check the pipeline execution** in Harness - all steps should be green
@@ -115,19 +169,34 @@ Watch the pipeline execute:
 
 ## Key Takeaways
 
-- **Harness Cloud** provides instant, zero-config build infrastructure
+- **Multiple infrastructure options** - Choose Harness Cloud or Kubernetes based on your needs
+- **Harness Cloud** requires account verification but provides the best experience
 - **Test Intelligence** optimizes test execution for faster feedback
 - **Templates** standardize build processes across teams
 - **Docker integration** makes artifact management seamless
+- **Cache Intelligence** (Harness Cloud only) dramatically speeds up builds
 - **Pipeline as Code** can be stored inline or in Git
+
+## Build Infrastructure Comparison
+
+| Feature | Harness Cloud | Kubernetes |
+|---------|---------------|------------|
+| Setup Required | None | Minimal (connector) |
+| Account Requirements | Verified account | Any account |
+| Performance | Fastest (bare-metal) | Depends on cluster |
+| Scaling | Automatic | Manual/cluster-dependent |
+| Cache Intelligence | ✅ Yes | ❌ No |
+| Cost | Pay-as-you-go | Use existing infrastructure |
 
 ## Pipeline Configuration Summary
 
-Your pipeline now has these stages:
+Your pipeline now has these components:
 - **Build** stage with:
+  - Infrastructure: Harness Cloud or Kubernetes
   - Test Intelligence (pytest)
-  - Compile Application (Angular build)
+  - Compile Application (Angular build via template)
   - Docker Build & Push (to Docker Hub)
+  - Cache Intelligence (optional, Harness Cloud only)
 
 ---
 

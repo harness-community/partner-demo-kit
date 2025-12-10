@@ -2,6 +2,24 @@
 
 > **Important**: All activities in the **"Base Demo"** project
 
+## About This Partner Demo Kit
+
+This is the **Base Partner Demo Kit** - one of two comprehensive demo kits available for Harness partners:
+
+1. **Base Partner Demo Kit** (this kit) - Covers core Harness capabilities:
+   - Code Repository with Secret Scanning
+   - CI Pipeline with Test Intelligence
+   - Continuous Deployment (Rolling and Canary strategies)
+   - Continuous Verification with Prometheus
+
+2. **Advanced Partner Demo Kit** - Extends the base kit with licensed features:
+   - Security Testing Orchestration (STO)
+   - Software Supply Chain Assurance (SSCA)
+   - OPA Policy Enforcement
+   - Advanced governance capabilities
+
+> **Note**: The advanced features (Labs 5 and 7) require a licensed partner organization. This base kit can be completed with a free Harness account.
+
 ## Overview
 This guide helps you get started with the Harness Partner Demo Kit. Before proceeding with the individual labs, ensure you have completed all setup steps and can access your Harness account.
 

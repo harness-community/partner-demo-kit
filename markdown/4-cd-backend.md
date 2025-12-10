@@ -27,9 +27,30 @@ On the **Service** tab:
 2. Select **backend** (this was pre-configured by Terraform)
 3. Click **Continue**
 
-> **Note**: The backend service was created by Terraform and includes:
-> - Kubernetes manifests from `harness-deploy/backend/`
-> - Docker artifact configuration pointing to `dockerhubaccountid/harness-demo:backend-latest`
+> **About the Backend Service Template**:
+>
+> The backend service was **pre-configured by Terraform** to demonstrate how platform teams can create reusable service templates. This service includes:
+>
+> **Kubernetes Manifests** (from Harness Code Repository):
+> - **Repository**: `partner_demo_kit`
+> - **Manifest Path**: `harness-deploy/backend/manifests/`
+> - **Values File**: `harness-deploy/backend/values.yaml`
+> - These manifests define the backend deployment, service, and configuration
+>
+> **Docker Artifact Configuration**:
+> - **Artifact Source**: Docker Registry
+> - **Connector**: `workshop-docker` (reusing the connector from the frontend)
+> - **Image Path**: `dockerhubaccountid/harness-demo`
+> - **Tag**: `backend-latest`
+> - This points to the backend Docker image you built during setup
+>
+> **What This Demonstrates**:
+> - Platform teams can create and maintain service definitions centrally
+> - Development teams can simply select and use pre-configured services
+> - Standardization ensures consistency across deployments
+> - Services can be versioned and updated independently of pipelines
+>
+> By using a pre-configured service, you're following a **platform engineering** approach where infrastructure and deployment configurations are managed as reusable templates.
 
 ## Step 3: Propagate Environment from Frontend
 
@@ -39,8 +60,22 @@ On the **Environment** tab:
 2. Select **Stage [Frontend - Deployment]**
 3. Click **Continue**
 
-> **Why Propagate?**
-> Both frontend and backend deploy to the same environment (Dev) and infrastructure (K8s Dev). Propagating ensures consistency and reduces configuration.
+> **Understanding Environment Propagation**:
+>
+> Instead of manually selecting the environment and infrastructure again, we're **propagating** from the frontend stage. This means:
+>
+> **What's Being Inherited**:
+> - **Environment**: `Dev` (created by Terraform)
+> - **Infrastructure**: `K8s Dev` (Kubernetes cluster connector)
+> - **All environment variables** and configurations
+>
+> **Benefits of Propagation**:
+> - **Consistency**: Both frontend and backend deploy to the same environment
+> - **Less Configuration**: No need to select the same settings twice
+> - **Reduced Errors**: Eliminates potential mismatches between stages
+> - **Easier Updates**: Changing the environment in one place updates all propagated stages
+>
+> This is particularly useful in multi-service architectures where several services need to deploy to the same environment as part of a single pipeline execution.
 
 ## Step 4: Choose Canary Deployment Strategy
 
