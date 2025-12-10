@@ -1,72 +1,98 @@
+# Lab 1: Code Repository Secret Scanning
 
-<style type="text/css" rel="stylesheet">
-hr.cyan { background-color: cyan; color: cyan; height: 2px; margin-bottom: -10px; }
-h2.cyan { color: cyan; }
-</style><h2 class="cyan">Harness Code</h2>
-<hr class="cyan">
-<br><br>
+> **Important**: All demo activities take place in the **"Base Demo"** project in Harness
 
-First let's select the project that's been created for this workshop <br>
-![project_selection.png](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/project_selection.png)
+## Overview
+This lab demonstrates Harness Code Repository's secret scanning feature, which prevents sensitive data (like API tokens, passwords, and keys) from being committed to your repository.
 
-## Let's take a look at our code
-![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/module_code.png)
+## Prerequisites
+- Terraform setup completed (creates "Base Demo" project and `partner_demo_kit` repository)
+- Harness account with Code Repository module enabled
 
-Select the **Code Repository** module from the list <br>
+## Step 1: Navigate to Harness Code Repository
 
-Click on the **harnessrepo** that's been setup for you <br>
-![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/code_repo.png)
+1. Log in to your Harness account at [app.harness.io](https://app.harness.io)
+2. Select the **"Base Demo"** project
+3. Click on **Code Repository** module in the left navigation
 
-Click on **Clone** in the top right <br>
-And then click ```+Generate Clone Credential``` <br>
-![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/code_clone.png)
+## Step 2: Generate Clone Credentials
 
-Copy the values from here and store them on the `Notes` 📝 tab or locally on your machine.
+The `partner_demo_kit` repository was created by Terraform. You need credentials to clone it:
 
-> # Switch to the ```>_Shell``` tab to continue
+1. Click on the **"partner_demo_kit"** repository
+2. Click **"Clone"** button in the top right
+3. Click **"+Generate Clone Credential"**
+4. **Save the generated username and token** - you'll need these in the next step
 
-### Update our credential file
-> [!NOTE]
-> This step is optional, but will eliminate the need to enter the username and password in subsequent steps.
+## Step 3: Clone the Harness Code Repository
 
-<br>
-
-Click `▶️ run` and then provide the token you just copied.
-```bash,run
-./script.sh
-```
-
-### Clone the repo
-```bash,run
-git clone [[ Instruqt-Var key="HARNESS_REPO_URL" hostname="sandbox" ]]
-```
-
-> # Switch to the ```Code Editor``` tab to continue
-
-### Update `backend` **>** `entrypoint.sh` file
-- Under `APP_PORT=${PORT:-8000}`
-  - Add:
 ```bash
-TOKEN="02290a2a-7f5a-4836-8745-d4d797e475d0"
+# Clone the repository (use the URL from the Harness UI)
+git clone <harness-code-repo-url>
+cd partner_demo_kit
+
+# When prompted, enter the credentials you generated in Step 2
 ```
 
-1) Click on `Source Control` tab on the left nav
-2) Enter your commit message e.g., `added my password`
-3) Click the dropdown `v`
-4) Click `Commit & Push` \
-    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/vs_code_commit.png)
-5) Click `Yes` \
-    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/vs_code_stage_changes.png)
+## Step 4: Enable Secret Scanning
 
+1. In Harness UI, go to **Code Repository** > **Manage Repository**
+2. Click on the **Security** tab
+3. Toggle **"Secret Scanning"** to **ON**
+4. Click **Save**
 
-## Our commit has been blocked...
-![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/vs_code_commit_error.png)
-- Click on `Show Command Output` to see the details
+## Step 5: Test Secret Scanning
 
-## *Why wait until your secrets are committed to detect them?*
-### With ***Harness Code*** you don't have to
-Harness Code provides security features to protect your code and ***prevent*** `secrets` or `vulnerabilities` from being pushed to your Git repositories. ***Blocking*** secrets and vulnerabilities from being introduced into your repos is crucial for securing your codebase.
+Now let's intentionally try to commit a secret to demonstrate the blocking feature:
 
-===============
+1. **Edit the file** `backend/entrypoint.sh`
+2. **Add this line** anywhere in the file:
+   ```bash
+   TOKEN="02290a2a-7f5a-4836-8745-d4d797e475d0"
+   ```
 
-Click the **Check** button to continue.
+3. **Try to commit and push**:
+   ```bash
+   git add .
+   git commit -m "test secret scanning"
+   git push
+   ```
+
+## Expected Result
+
+The push should be **BLOCKED** with an error message similar to:
+
+```
+! [remote rejected] main -> main (pre-receive hook declined)
+error: failed to push some refs to '<repo-url>'
+```
+
+The output will indicate that a **Generic High Entropy Secret** was detected.
+
+## Key Takeaways
+
+- **Harness Code Repository** provides security features to protect your code
+- **Secret scanning** prevents secrets from being pushed to repositories
+- This is **proactive security** - blocking secrets before they enter your codebase
+- No waiting for secrets to be committed - prevention happens at push time
+
+## Why This Matters
+
+Traditional secret detection tools scan after commits are made. Harness Code blocks secrets **before** they enter your repository, providing:
+- Earlier detection in the development cycle
+- Reduced risk of exposed credentials
+- Compliance with security best practices
+- Protection against accidental credential leaks
+
+## Clean Up
+
+Remove the test secret from your local file:
+
+```bash
+# Remove the TOKEN line from backend/entrypoint.sh
+git checkout backend/entrypoint.sh
+```
+
+---
+
+**Next**: Proceed to [Lab 2: CI Pipeline Setup](2-build.md)

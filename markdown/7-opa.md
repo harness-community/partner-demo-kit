@@ -91,13 +91,13 @@ contains(arr, elem) {
 > ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_save.png)
 
 ## Pipeline can not be saved due to the policy evaluation failures
-![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_pipeline_missing_approval.png)
+![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/unscripted_pipeline_missing_approval.png)
 
 > [!IMPORTANT]
 > Oops. That's not allowed. Let's add an approval stage so we can get back on track.
 
 > 1) `Before` the ***Frontend - Deployment*** stage click on the `+` icon to add a new stage \
->    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_pipeline_add_approval_stage.png)
+>    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/unscripted_pipeline_add_approval_stage.png)
 > 2) Select `Approval` and configure with the details below ↓ \
 >    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_stage_approval.png)
 >
@@ -112,7 +112,7 @@ contains(arr, elem) {
 > - Name: <pre>`Harness Approval`</pre>
 > - **Approvers**
 >   - User Groups: `Production Approvers` \
->    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_approval_group.png)
+>    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/unscripted_approval_group.png)
 > - After completing configuration click **Apply Changes** from the top right of the configuration popup
 
 > Click **Save** in the top right to save your pipeline. <br>

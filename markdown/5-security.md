@@ -1,91 +1,79 @@
+# Lab 5: Security Testing (STO)
 
-<style type="text/css" rel="stylesheet">
-hr.cyan { background-color: cyan; color: cyan; height: 2px; margin-bottom: -10px; }
-h2.cyan { color: cyan; }
-</style><h2 class="cyan">Integrate Security Scanners</h2>
-<hr class="cyan">
-<br><br>
+> **Important**: All activities in the **"Base Demo"** project
 
-## Integrating Security Scans
-Harness offers robust and versatile solutions tailored to meet the stringent demands of even the most discerning security professionals.
-### Go back to the `Pipeline Studio` and edit your pipeline
+## Overview
+This lab demonstrates Harness Security Testing Orchestration (STO), which integrates multiple security scanners into your CI/CD pipeline. STO provides normalized, deduplicated, and prioritized vulnerability data across all your security tools.
 
-## Harness Built-in Scanners
-### Adding SCA Scanners
-> 1) In the existing pipeline, within the ***Build*** stage `after` the ***Compile*** step click on `+ Add Step` \
->     ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_pipeline_build_add_sca_step.png)
-> 2) Select `Add Step` \
->    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_pipeline_build_add_step_buitin_scanners.png)
-> 3) Select `Built-in Scanners` \
->    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/sto_built_in_scanner_sca.png)
-> 4) Select `SCA` and click **Add Scanners**
-> 5) Rename the steps to <pre>`OWASP`</pre> and <pre>`OSV Scan`</pre>
+## Important Note
 
-### Adding Container Image Scanner
-> 1) In the existing pipeline, within the ***Build*** stage `after` the ***Push To Dockerhub*** step click on `+ Add Step` \
->     ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_add_step.png)
-> 2) Select `Add Step` \
->    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_pipeline_build_add_step_buitin_scanners.png)
-> 3) Select `Built-in Scanners` \
->    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/sto_built_in_scanner_container.png)
-> 4) Select `Container` from the Step Library and configure with the details below ↓
->
-> **Built-in Container Scanners**
-> - Check: `Aqua Trivy`
->   - *Uncheck the other scanners*
-> - **Container Information**
->   - Type: `Docker V2`
->   - Image: <pre><code>dockerhubaccountid/harness-demo:demo-base-<+pipeline.sequenceId></pre></code>
-> - After completing configuration select **Add Scanners**
->
-> 5) Rename the step to <pre>`Aqua Trivy`</pre>
-> 6) Then click on the `dind` step \
->    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_step_dind.png) \
->    and configure with the details below ↓
-> **Configure Background Step**
-> - **Additional Configuration  ⏷**
->   - Container Registry: `workshop-docker`
->   - (You may need to click the `All` or `Org` tab to see the registry)
-> - Click **Apply Changes** from the top right of the configuration popup
+**This lab is only available with a licensed partner organization.**
 
-### DAST Scan Template Owned by the Security Team
-Now we are going to add a `Stage` template to run DAST Scans.
+If you have access to a licensed Harness partner organization, you can add the following security scanning capabilities to your pipeline:
 
-> [!NOTE]
-> Typically, the security team owns these scans, and as such, they will manage and version the template as needed. They simply require that we include it in our pipeline.
+## Security Scanning Capabilities
 
-> 1) In the existing pipeline, click on the `+` icon under the ***Backend - Deployment*** stage to add a new stage \
->    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_pipeline_add_sto_stage.png)<br>
-> 2) Select `Use template` \
->    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_stage_use_template.png)
-> 3) Select `DAST Scans` template and click `Use template`
-> 4) Name the stage <pre>`DAST Scans`</pre>
+### Software Composition Analysis (SCA)
+- **OWASP Dependency Check**: Identifies known vulnerabilities in project dependencies
+- **OSV Scanner**: Checks for vulnerabilities using the Open Source Vulnerabilities database
 
-<br>
+### Container Image Scanning
+- **Aqua Trivy**: Comprehensive vulnerability scanner for container images
+- Scans the Docker image built in your CI pipeline
 
-### Execute your updated Pipeline
-> Click **Save** in the top right to save your pipeline. <br>
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_save.png)
+### Dynamic Application Security Testing (DAST)
+- **Stage Template**: Security team-managed DAST scans
+- Runs after deployment to test the running application
+- Typically owned and versioned by the security team
 
-> Now click **Run** to execute the pipeline. <br>
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_run.png)
+### Static Application Security Testing (SAST)
+- **Semgrep**: Static code analysis to find security vulnerabilities in source code
 
-### Security Scan Results
-The scans take ~3 minutes to run. <br>
-After the execution is complete, go to the `Security Tests` tab to see the *deduplicated*, *normalized* and *prioritized* list of `vulnerabilities` discovered across your scanners. <br>
-![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_pipeline_security_tests_tab.png)
+## What STO Provides
 
-## ***BONUS***
-### Adding SAST Scanner
-> 1) In the existing pipeline, within the ***Build*** stage `under` the ***OSV Scan*** step click on `+ Add Step` \
->     ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_add_step.png)
-> 2) Select `Add Step` \
->    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_pipeline_build_add_step_buitin_scanners.png)
-> 3) Select `Built-in Scanners` \
->    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/sto_built_in_scanner_sast.png)
-> 4) Select `SAST` and click **Add Scanner**
-> 5) Rename the step to `Semgrep`
+When enabled in a licensed partner org, STO offers:
 
-===============
+1. **Unified Dashboard**: Single view of all security findings across multiple scanners
+2. **Deduplication**: Eliminates duplicate findings from different tools
+3. **Normalization**: Standardizes vulnerability data from different scanners
+4. **Prioritization**: Ranks vulnerabilities by severity and exploitability
+5. **Policy Enforcement**: Fail pipelines based on security policies (e.g., no critical CVEs)
+6. **Exemptions**: Manage false positives and accepted risks
+7. **Tracking**: Monitor vulnerability trends over time
 
-Click the **Check** button to continue.
+## Integration Points in Your Pipeline
+
+With a licensed org, you would add security scanning at these stages:
+
+**Build Stage (SCA + SAST):**
+- After the **Compile** step: Add OWASP and OSV scanners
+- After the **Compile** step: Add Semgrep SAST scanner
+
+**Build Stage (Container Scanning):**
+- After the **Push to Dockerhub** step: Add Aqua Trivy scanner
+
+**After Backend Deployment (DAST):**
+- Add **DAST Scans** stage template
+- Tests the live application at http://localhost:8080
+
+## Expected Results
+
+After scanners complete (typically 3-5 minutes), you would see:
+
+- **Security Tests Tab**: Consolidated view of all vulnerabilities
+- **Severity Breakdown**: Critical, High, Medium, Low findings
+- **Affected Components**: Which dependencies or code sections have issues
+- **Remediation Guidance**: How to fix identified vulnerabilities
+
+## Next Steps
+
+For access to STO capabilities:
+1. Contact your Harness account team about partner organization licensing
+2. Complete partner enablement program
+3. Gain access to licensed features including STO, SSCA, and advanced policy enforcement
+
+---
+
+**Next**: Proceed to [Lab 6: Continuous Verification](6-cv.md)
+
+> **Note**: You can proceed with Lab 6 (Continuous Verification) which is available in the Base Demo project without additional licensing.

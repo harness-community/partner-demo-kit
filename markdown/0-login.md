@@ -1,38 +1,162 @@
+# Lab 0: Getting Started
 
-<style type="text/css" rel="stylesheet">
-hr.cyan { background-color: cyan; color: cyan; height: 2px; margin-bottom: -10px; }
-h2.cyan { color: cyan; }
-</style><h2 class="cyan">👋 Welcome to your Harness Workshop Sandbox!</h2>
-<hr class="cyan">
-<br>
+> **Important**: All activities in the **"Base Demo"** project
 
-> [!IMPORTANT]
-> Make sure you scroll to the bottom of the lab guide in each lab
-> <img src="https://raw.githubusercontent.com/FortAwesome/Font-Awesome/6.x/svgs/solid/arrow-turn-down.svg" width="60" height="60" style="vertical-align: right; display: inline; filter: invert(80%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(90%) contrast(90%);">
+## Overview
+This guide helps you get started with the Harness Partner Demo Kit. Before proceeding with the individual labs, ensure you have completed all setup steps and can access your Harness account.
 
-<br>
+## Prerequisites
 
-## A Sandbox Account has been provisioned for you to use for the duration of this workshop.
-Login to your **Harness Sandbox** account using the details provided below.👇
+Before starting the labs, ensure you have completed:
+
+1. **Harness Account Setup**
+   - Harness account with CI, CD, and Code Repository modules enabled
+   - Harness delegate installed at account level (Helm-based recommended)
+
+2. **Local Environment Setup**
+   - Docker Desktop or Docker Engine running
+   - Kubernetes cluster: Rancher Desktop (recommended) or minikube
+   - Terraform installed
+   - kubectl and helm installed
+   - Git client installed
+
+3. **Docker Hub Account**
+   - Docker Hub account created
+   - Repository `harness-demo` created in Docker Hub
+   - Docker Hub Personal Access Token (PAT) generated
+
+4. **Terraform Provisioning Completed**
+   - Ran `terraform apply` from the `kit/` directory
+   - Verified "Base Demo" project was created in Harness
+   - Verified `partner_demo_kit` Code Repository was created
+
+## Access Your Harness Account
+
+1. Navigate to [app.harness.io](https://app.harness.io)
+2. Log in with your Harness credentials
+3. **Select the "Base Demo" project** from the project picker
+
+> **Important**: All lab activities take place in the **"Base Demo"** project. This keeps demo resources separate from production environments.
+
+## Verify Your Setup
+
+Before proceeding to Lab 1, verify:
+
+### 1. Harness Resources Created by Terraform
+
+Navigate to the **"Base Demo"** project and verify:
+
+**Code Repository:**
+- Repository: `partner_demo_kit` exists
+
+**Connectors:**
+- `workshop-docker` - Docker Hub connector
+- `workshop_k8s` - Kubernetes connector (for local cluster)
+- Prometheus connector (for continuous verification)
+
+**Environments:**
+- `Dev` environment created
+- `K8s Dev` infrastructure definition created
+
+**Services:**
+- `backend` service pre-configured with K8s manifests
+
+**Templates:**
+- `Compile Application` step template created
+
+**Monitored Services:**
+- `backend_dev` monitored service for continuous verification
+
+### 2. Local Kubernetes Cluster Running
+
+**With Rancher Desktop:**
+```bash
+# Check cluster status
+kubectl cluster-info
+
+# Should see Kubernetes control plane running
+```
+
+**With minikube:**
+```bash
+# Check cluster status
+minikube status
+
+# Should show: host, kubelet, and apiserver running
+```
+
+### 3. Prometheus Deployed
+
+```bash
+# Check Prometheus pod
+kubectl get pods -n monitoring
+
+# Should see prometheus-k8s-0 pod running
+```
+
+### 4. Docker Hub Access
+
+```bash
+# Test Docker login
+docker login
+
+# Verify you can push to your repository
+docker pull hello-world
+docker tag hello-world dockerhubaccountid/harness-demo:test
+docker push dockerhubaccountid/harness-demo:test
+```
+
+Replace `dockerhubaccountid` with your actual Docker Hub username.
+
+## Troubleshooting
+
+### Can't Find "Base Demo" Project
+- Verify Terraform completed successfully
+- Check Harness UI > Projects to see if project exists
+- Re-run `terraform apply` if needed
+
+### Kubernetes Cluster Not Accessible
+**Rancher Desktop:**
+- Check Rancher Desktop is running
+- Verify Kubernetes is enabled in Settings
+
+**Minikube:**
+- Run `minikube start` to start the cluster
+- Run `minikube status` to verify
+
+### Prometheus Not Running
+```bash
+# Reinstall Prometheus
+cd kit
+kubectl create namespace monitoring
+kubectl -n monitoring apply -f ./prometheus.yml
+```
+
+### Docker Push Fails
+- Verify Docker Hub credentials in `kit/se-parms.tfvars`
+- Check Docker Hub repository `harness-demo` exists
+- Verify you're logged into Docker Hub: `docker login`
+
+## Lab Structure
+
+The demo consists of these labs:
+
+1. **Lab 1: Code Repository Secret Scanning** - Prevent secrets from being committed
+2. **Lab 2: CI Pipeline** - Build with test intelligence and Docker push
+3. **Lab 3: Frontend Deployment** - Rolling deployment to Kubernetes
+4. **Lab 4: Backend Deployment** - Canary deployment strategy
+5. **Lab 5: Security Testing** - (Requires licensed partner org)
+6. **Lab 6: Continuous Verification** - ML-powered deployment validation
+7. **Lab 7: OPA Policy Enforcement** - (Requires licensed partner org)
+
+## Important Notes
+
+- All demo activities use the **"Base Demo"** project
+- The `partner_demo_kit` repository in Harness Code is a mirror of the GitHub repository
+- You'll need to generate Git credentials for the Harness Code Repository (covered in Lab 1)
+- Keep a terminal with `minikube tunnel` running throughout the demo (if using minikube)
+- Rancher Desktop users don't need a tunnel - services are automatically accessible
 
 ---
-## Harness Sandbox Account details:
-|  |   |
-| ----- | ----- |
-| **Username**    |<pre>`[[ Instruqt-Var key="HARNESS_USER" hostname="sandbox" ]]`</pre>|
-| **Password**    |<pre>`[[ Instruqt-Var key="HARNESS_PWD" hostname="sandbox" ]]`</pre>|
 
-> [!NOTE]
-> *All credentials for this lab can always be found on the: <br>
->  <img src="https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/link.svg" alt="Link icon" width="16" height="16" style="display: inline; vertical-align: middle;">`Lab Credentials` tab*
-
-
----
-
-> 📝 *Click Single sign-on* <br>
-> *Login using the credentials above:* <br>
-> ![sso_login.png](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/sso_login.png)
-
-===============
-
-Click the **Check** button to continue.
+**Next**: Proceed to [Lab 1: Code Repository Secret Scanning](1-coderepo.md)

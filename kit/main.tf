@@ -52,13 +52,13 @@ resource "harness_platform_repo" "partner_demo_kit" {
   }
 }
 
-resource "harness_platform_connector_kubernetes" "instruqt" {
+resource "harness_platform_connector_kubernetes" "workshop_k8s" {
   org_id             = var.org_id
   project_id         = harness_platform_project.base_demo.identifier
-  identifier         = "instruqt_k8"
-  name               = "Instruqt K8s"
-  description        = "Connector to Instruqt workshop K8s cluster"
-  
+  identifier         = "workshop_k8s"
+  name               = "Workshop K8s"
+  description        = "Connector to local K8s cluster (minikube)"
+
   inherit_from_delegate {
     delegate_selectors = ["helm-delegate"]
   }
@@ -147,14 +147,14 @@ template:
         mkdir -p ./src/environments
         echo "export const environment = {
           production: true,
-          defaultApiUrl: "'"https://backend.sandbox.<+variable.sandbox_id>.instruqt.io"'",
+          defaultApiUrl: "'"http://localhost:8000"'",
           defaultSDKKey: "'"<+variable.sdk>"'"
         };" > ./src/environments/environment.prod.ts
 
 
         echo "export const environment = {
           production: true,
-          defaultApiUrl: "'"https://backend.sandbox.<+variable.sandbox_id>.instruqt.io"'",
+          defaultApiUrl: "'"http://localhost:8000"'",
           defaultSDKKey: "'"<+variable.sdk>"'"
         };" > ./src/environments/environment.ts
 
@@ -172,7 +172,7 @@ resource "harness_platform_connector_prometheus" "prometheus" {
   name               = "Prometheus"
   org_id             = var.org_id
   project_id         = harness_platform_project.base_demo.identifier
-  description        = "Connector to Instruqt workshop Prometheus instance"
+  description        = "Connector to Prometheus instance (use ngrok URL or cluster-local URL)"
   url                = "http://prometheus-k8s.monitoring.svc.cluster.local:9090/"
   delegate_selectors = ["helm-delegate"]
 
@@ -248,7 +248,7 @@ infrastructureDefinition:
   deploymentType: Kubernetes
   type: KubernetesDirect
   spec:
-    connectorRef: ${harness_platform_connector_kubernetes.instruqt.identifier}
+    connectorRef: ${harness_platform_connector_kubernetes.workshop_k8s.identifier}
     namespace: default
     releaseName: release-<+INFRA_KEY>
   allowSimultaneousDeployments: true
@@ -257,7 +257,7 @@ EOT
   depends_on = [
     harness_platform_project.base_demo,
     harness_platform_environment.dev,
-    harness_platform_connector_kubernetes.instruqt
+    harness_platform_connector_kubernetes.workshop_k8s
   ]
 }
 

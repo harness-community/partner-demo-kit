@@ -1,61 +1,157 @@
+# Lab 6: Continuous Verification
 
-<style type="text/css" rel="stylesheet">
-hr.cyan { background-color: cyan; color: cyan; height: 2px; margin-bottom: -10px; }
-h2.cyan { color: cyan; }
-</style><h2 class="cyan">Continuous Verification</h2>
-<hr class="cyan">
-<br><br>
+> **Important**: All activities in the **"Base Demo"** project
 
-## Now let's add Continuous Verification
-### Go back to the `Pipeline Studio`
-1) In the existing pipeline, within the ***Backend - Deployment*** stage `after` the ***Canary Deployment*** step click on the `+` icon to add a new step \
-   ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_pipeline_deploy_canary_add_step.png)<br>
-2) Select `Add Step` \
-   ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_step_verify.png)
-3) Select `Verify` from the Step Library and configure with the details below ↓
+## Overview
+This lab adds Continuous Verification (CV) to your backend canary deployment. Harness CV uses machine learning to analyze metrics from Prometheus and automatically detect anomalies during deployment, enabling automated rollback if issues are detected.
 
-> **Verify**
-> - Name: <pre>`Verify`</pre>
-> - Continuous Verification Type: `Canary`
-> - Sensitivity: `Low`
-> - Duration: `5mins`
-> - Click **Apply Changes** from the top right of the configuration popup
+## Prerequisites
+- Completed Lab 4 (Backend Deployment)
+- Backend service deployed with canary strategy
+- Prometheus running in your Kubernetes cluster
+- Monitored service `backend_dev` created by Terraform
 
-> [!NOTE]
-> ***Continuous Verification Sensitivity*** <br>
-> This is to define how sensitive the ML algorithms are going to be on deviation from the baseline.
+## Step 1: Add Verify Step to Backend Deployment
 
-### Execute your Pipeline
-> Click **Save** in the top right to save your pipeline. <br>
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_save.png)
+1. In the Pipeline Studio, navigate to the **Backend - Deployment** stage
+2. Click on the **Execution** tab
+3. **After** the **Canary Deployment** step, click **+ Add Step**
+4. Select **Add Step** > **Verify**
 
-> Now click **Run** to execute the pipeline. <br>
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_run.png)
+## Step 2: Configure the Verify Step
 
-> # Switch to the ```Demo App``` tab to continue
+Configure the Verify step with these details:
 
-### While the canary deployment is ongoing see if you can spot the canary!
-- Click the `Check Release` button
-- (Don't worry! Keep on clicking it!) \
-    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_captain_canary.png)
+**Verify Configuration:**
+- **Name**: `Verify`
+- **Continuous Verification Type**: `Canary`
+- **Sensitivity**: `Low`
+- **Duration**: `5 mins`
+
+Click **Apply Changes**
+
+> **What is Sensitivity?**
+> This defines how sensitive the ML algorithms are to deviations from the baseline:
+> - **Low**: More tolerant of variations (good for initial testing)
+> - **Medium**: Balanced detection
+> - **High**: Strict detection, flags smaller anomalies
+
+## Step 3: Save and Run the Pipeline
+
+1. Click **Save** in the top right
+2. Click **Run**
+3. Configure the run:
+   - **Branch Name**: `main`
+   - **Stage: Frontend - Deployment**
+     - **Primary Artifact**: `frontend`
+   - **Stage: Backend - Deployment**
+     - **Primary Artifact**: `backend`
+4. Click **Run Pipeline**
+
+## Monitor the Verification
+
+Watch the pipeline execute through all stages:
+- ✅ **Build** - CI pipeline
+- ✅ **Frontend - Deployment** - Rolling deployment
+- ✅ **Backend - Deployment** - Canary deployment with verification
+
+The **Verify** step will take 5 minutes to complete while it analyzes metrics from Prometheus.
+
+## Test the Application During Verification
+
+While the canary deployment and verification are running, test the application:
+
+**Ensure minikube tunnel is running** (if using minikube):
+```bash
+# In a separate terminal
+minikube tunnel
+```
+
+### Spot the Canary!
+
+1. Open browser to: http://localhost:8080
+2. Keep clicking the **"Check Release"** button
+3. Look for a **yellow cartoon graphic** - that's the canary!
+   - This special graphic is served only by canary pods
+   - It demonstrates that traffic is being sent to the canary version
 
 ### Distribution Test
-- Now click on the `Start` button on the **Distribution Test** panel
-- Then click the **Play** `▶️` button to start the test and observe the traffic distribution \
-    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_traffic_distribution_test.png)
 
-> # Switch to the ```Harness Platform``` tab to continue
+1. Click **"Distribution Test"** > **"Start"** button
+2. Click the **Play (▶️)** button
+3. Watch the traffic distribution graph build out
+   - This shows how requests are distributed across backend pods
+   - During canary deployment, you'll see traffic split between stable and canary pods
 
-### Validate the outcome of the verification on the pipeline execution details
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_cv_verification.png)
-> 1) Toggle `Console View`
-> 2) Select the `Verify` step
-> 3) Uncheck the option to `Display only anomalous metrics and affected nodes`
-> 4) Click the `⏷` to view the details
+## View Verification Results
 
-## This is just the beginning.
-`Harness Continuous Verification` integrates with APMs and logging tools to verify that the deployment is running safely and efficiently. Harness CV applies **machine learning** algorithms to every deployment for identifying normal behavior. This allows Harness to identify and flag anomalies in future deployments. During the Verify step, Harness CV `automatically` triggers a **rollback** if anomalies are found.
+After the Verify step completes:
 
-===============
+1. In the Harness UI, click on the **Verify** step in the pipeline execution
+2. Toggle **Console View** to see detailed metrics
+3. Uncheck **"Display only anomalous metrics and affected nodes"** to see all metrics
+4. Click the **⏷** dropdown to view the details
 
-Click the **Check** button to continue.
+You'll see:
+- Metrics collected from Prometheus
+- Baseline comparison data
+- ML analysis results
+- Pass/fail status for each metric
+
+## How Continuous Verification Works
+
+Harness CV integrates with APMs and logging tools to verify deployments are running safely and efficiently:
+
+1. **Baseline Learning**: CV learns normal behavior from previous successful deployments
+2. **Real-time Analysis**: During deployment, CV collects metrics and compares them to the baseline
+3. **ML Detection**: Machine learning algorithms identify anomalies
+4. **Automated Action**: If anomalies exceed the sensitivity threshold, CV can automatically trigger a rollback
+
+> **Key Benefit**: Automatic rollback on anomalies means safer deployments with less manual monitoring required.
+
+## Verify the Deployment
+
+### Check Kubernetes Resources
+
+```bash
+# View all deployments
+kubectl get pods -A | grep deployment
+
+# View all services
+kubectl get services -A | grep svc
+```
+
+You should see:
+- `frontend-deployment` pods
+- `backend-deployment` pods (now fully promoted after successful canary + verification)
+- `web-frontend-svc` service
+- `web-backend-svc` service
+
+## Key Takeaways
+
+- **Continuous Verification** adds ML-powered safety gates to deployments
+- **Prometheus integration** provides metrics for analysis without additional instrumentation
+- **Automated rollback** reduces risk by catching issues before full rollout
+- **Sensitivity tuning** allows you to balance between false positives and detection accuracy
+- **Monitored services** (like `backend_dev`) define which metrics to analyze
+
+## What You've Built
+
+Your complete pipeline now includes:
+1. **Build** stage
+   - Test Intelligence
+   - Compile Application
+   - Docker Build & Push
+2. **Frontend - Deployment** stage
+   - Rolling deployment
+3. **Backend - Deployment** stage
+   - Canary deployment
+   - Automated traffic shifting
+   - **Continuous Verification (new!)**
+   - ML-powered anomaly detection
+
+---
+
+**Next**: Proceed to [Lab 7: OPA Policy Enforcement](7-opa.md)
+
+> **Note**: Lab 5 (Security Testing) and Lab 7 (OPA Policy) are available only with a licensed partner organization
