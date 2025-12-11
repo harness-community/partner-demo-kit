@@ -49,3 +49,5 @@ next-env.d.ts
 
 # Demo configuration
 .demo-config
+kit/se-parms.tfvars
+kit/se-parms.tfvars

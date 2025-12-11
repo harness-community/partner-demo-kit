@@ -1,4 +1,4 @@
-account_id = "harness account id can be found in the url when you view your profile like  VEuU4vZ6QmSJZcgvnccqYQ"
+account_id = "i5PKNXNDSHuuT1uNSJgl-A"
 
-docker_username = "username"
-docker_password = "password"
+docker_username = "degas1980"
+docker_password = "5fd6cc31-d731-4f4a-87fd-6373efb9d027"

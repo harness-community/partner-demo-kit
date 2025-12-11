@@ -254,9 +254,12 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
       done
     fi
 
-    # Save username to config file for future runs
-    echo "DOCKER_USERNAME=$DOCKER_USERNAME" > "$CONFIG_FILE"
-    print_info "Saved username to $CONFIG_FILE for future runs"
+    # Save username to config file for future runs (only if file doesn't exist yet)
+    # This preserves any existing credentials that were saved by the Terraform section
+    if [ ! -f "$CONFIG_FILE" ] || [ ! -s "$CONFIG_FILE" ]; then
+      echo "DOCKER_USERNAME=$DOCKER_USERNAME" > "$CONFIG_FILE"
+      print_info "Saved username to $CONFIG_FILE for future runs"
+    fi
 
     # Login to Docker Hub
     echo ""
@@ -300,175 +303,243 @@ fi
 
 # Configure and run Terraform
 if [ "$SKIP_TERRAFORM" = false ]; then
-  print_section "Configuring Harness Resources with Terraform"
+  print_section "Configuring Harness Resources"
 
   # Configuration file
   CONFIG_FILE=".demo-config"
 
-  # Check if Terraform has already been applied
-  if [ -f "kit/terraform.tfstate" ] && [ -s "kit/terraform.tfstate" ]; then
-    print_status "Terraform state already exists - Harness resources appear to be configured"
-    print_info "To reconfigure, delete kit/terraform.tfstate or run: cd kit && terraform destroy"
-    echo ""
-  else
-    # Collect required variables
-    HARNESS_ACCOUNT_ID=""
-    HARNESS_PAT=""
-    DOCKER_PASSWORD=""
+  # Collect required variables (or load from cache)
+  HARNESS_ACCOUNT_ID=""
+  HARNESS_PAT=""
+  DOCKER_PASSWORD=""
 
-    # Get Harness Account ID
-    print_info "Collecting Harness configuration..."
-    echo ""
+  print_info "Checking cached credentials..."
+  echo ""
 
-    # Try to get account_id from config file
-    if [ -f "$CONFIG_FILE" ]; then
-      HARNESS_ACCOUNT_ID=$(grep "HARNESS_ACCOUNT_ID=" "$CONFIG_FILE" | cut -d'=' -f2)
+  # Get Harness Account ID
+  # Try to get account_id from config file first
+  if [ -f "$CONFIG_FILE" ]; then
+    HARNESS_ACCOUNT_ID=$(grep "HARNESS_ACCOUNT_ID=" "$CONFIG_FILE" | cut -d'=' -f2)
+  fi
+
+  # Try to get from se-parms.tfvars if not found
+  if [ -z "$HARNESS_ACCOUNT_ID" ] && [ -f "kit/se-parms.tfvars" ]; then
+    HARNESS_ACCOUNT_ID=$(grep account_id kit/se-parms.tfvars | cut -d'"' -f2 2>/dev/null || echo "")
+    # Check if it's a placeholder
+    if [[ "$HARNESS_ACCOUNT_ID" == *"harness account id"* ]] || [[ "$HARNESS_ACCOUNT_ID" == *"VEuU4vZ6QmSJZcgvnccqYQ"* ]]; then
+      HARNESS_ACCOUNT_ID=""
     fi
+  fi
 
-    # Try to get from se-parms.tfvars if not found
-    if [ -z "$HARNESS_ACCOUNT_ID" ] && [ -f "kit/se-parms.tfvars" ]; then
-      HARNESS_ACCOUNT_ID=$(grep account_id kit/se-parms.tfvars | cut -d'"' -f2 2>/dev/null || echo "")
-      # Check if it's a placeholder
-      if [[ "$HARNESS_ACCOUNT_ID" == *"harness account id"* ]] || [[ "$HARNESS_ACCOUNT_ID" == *"VEuU4vZ6QmSJZcgvnccqYQ"* ]]; then
-        HARNESS_ACCOUNT_ID=""
-      fi
+  # Prompt if not found
+  if [ -z "$HARNESS_ACCOUNT_ID" ]; then
+    echo "Your Harness Account ID can be found in the URL when viewing your profile"
+    echo "Example: https://app.harness.io/ng/account/VEuU4vZ6QmSJZcgvnccqYQ/settings/overview"
+    echo "         (the ID is: VEuU4vZ6QmSJZcgvnccqYQ)"
+    echo ""
+    read -p "Enter your Harness Account ID: " HARNESS_ACCOUNT_ID
+
+    while [ -z "$HARNESS_ACCOUNT_ID" ]; do
+      print_error "Account ID cannot be empty"
+      read -p "Enter your Harness Account ID: " HARNESS_ACCOUNT_ID
+    done
+  else
+    print_status "Using cached Harness Account ID: $HARNESS_ACCOUNT_ID"
+  fi
+
+  # Get Harness PAT
+  # Check environment variable first
+  if [ -n "$DEMO_BASE_PAT" ]; then
+    HARNESS_PAT="$DEMO_BASE_PAT"
+    print_status "Using Harness PAT from DEMO_BASE_PAT environment variable"
+  else
+    # Try to get from config file
+    if [ -f "$CONFIG_FILE" ]; then
+      HARNESS_PAT=$(grep "HARNESS_PAT=" "$CONFIG_FILE" | cut -d'=' -f2)
     fi
 
     # Prompt if not found
-    if [ -z "$HARNESS_ACCOUNT_ID" ]; then
-      echo "Your Harness Account ID can be found in the URL when viewing your profile"
-      echo "Example: https://app.harness.io/ng/account/VEuU4vZ6QmSJZcgvnccqYQ/settings/overview"
-      echo "         (the ID is: VEuU4vZ6QmSJZcgvnccqYQ)"
+    if [ -z "$HARNESS_PAT" ]; then
       echo ""
-      read -p "Enter your Harness Account ID: " HARNESS_ACCOUNT_ID
+      echo "You need a Harness Personal Access Token (PAT)"
+      echo "To create one: Profile > My API Keys & Tokens > + New Token"
+      echo "Token permissions needed: All resources, all scopes"
+      echo ""
+      read -p "Enter your Harness PAT: " HARNESS_PAT
 
-      while [ -z "$HARNESS_ACCOUNT_ID" ]; do
-        print_error "Account ID cannot be empty"
-        read -p "Enter your Harness Account ID: " HARNESS_ACCOUNT_ID
+      while [ -z "$HARNESS_PAT" ]; do
+        print_error "PAT cannot be empty"
+        read -p "Enter your Harness PAT: " HARNESS_PAT
       done
     else
-      print_info "Found Harness Account ID: $HARNESS_ACCOUNT_ID"
+      print_status "Using cached Harness PAT"
     fi
+  fi
 
-    # Get Harness PAT
-    echo ""
-    # Check environment variable first
-    if [ -n "$DEMO_BASE_PAT" ]; then
-      HARNESS_PAT="$DEMO_BASE_PAT"
-      print_status "Using Harness PAT from DEMO_BASE_PAT environment variable"
-    else
-      # Try to get from config file
-      if [ -f "$CONFIG_FILE" ]; then
-        HARNESS_PAT=$(grep "HARNESS_PAT=" "$CONFIG_FILE" | cut -d'=' -f2)
-      fi
+  # Get Docker password/PAT
+  # Try to get from config file first
+  if [ -f "$CONFIG_FILE" ]; then
+    DOCKER_PASSWORD=$(grep "DOCKER_PASSWORD=" "$CONFIG_FILE" | cut -d'=' -f2)
+  fi
 
-      # Prompt if not found
-      if [ -z "$HARNESS_PAT" ]; then
-        echo "You need a Harness Personal Access Token (PAT)"
-        echo "To create one: Profile > My API Keys & Tokens > + New Token"
-        echo "Token permissions needed: All resources, all scopes"
-        echo ""
-        read -p "Enter your Harness PAT: " HARNESS_PAT
-
-        while [ -z "$HARNESS_PAT" ]; do
-          print_error "PAT cannot be empty"
-          read -p "Enter your Harness PAT: " HARNESS_PAT
-        done
-      else
-        print_info "Found saved Harness PAT"
-      fi
-    fi
-
-    # Get Docker password/PAT
-    echo ""
-    # If we're logged in to Docker Hub, we don't need the password
-    LOGGED_IN_USER=$(docker info 2>/dev/null | grep "Username:" | awk '{print $2}')
-    if [ -n "$LOGGED_IN_USER" ]; then
-      print_info "Docker Hub password not needed (already logged in)"
-      # Use a placeholder since we're logged in
+  # Check if we're logged in to Docker Hub
+  LOGGED_IN_USER=$(docker info 2>/dev/null | grep "Username:" | awk '{print $2}')
+  if [ -n "$LOGGED_IN_USER" ]; then
+    # Already logged in - we can use a placeholder for Terraform but keep any cached PAT
+    if [ -z "$DOCKER_PASSWORD" ] || [ "$DOCKER_PASSWORD" = "logged-in-via-docker-desktop" ]; then
+      print_status "Docker Hub password not needed (already logged in)"
       DOCKER_PASSWORD="logged-in-via-docker-desktop"
     else
-      # Try to get from config file
-      if [ -f "$CONFIG_FILE" ]; then
-        DOCKER_PASSWORD=$(grep "DOCKER_PASSWORD=" "$CONFIG_FILE" | cut -d'=' -f2)
-      fi
+      print_status "Docker Hub password cached (logged in via Docker Desktop)"
+    fi
+  else
+    # Not logged in via Docker Desktop - need actual password
+    if [ -n "$DOCKER_PASSWORD" ] && [ "$DOCKER_PASSWORD" != "logged-in-via-docker-desktop" ]; then
+      print_status "Using cached Docker Hub password/PAT"
+    else
+      # No valid cached password, need to prompt
+      echo ""
+      echo "Enter your Docker Hub password or Personal Access Token (PAT)"
+      echo "To create a PAT: https://hub.docker.com/settings/security"
+      echo ""
+      read -sp "Docker Hub password/PAT: " DOCKER_PASSWORD
+      echo ""
 
-      # Prompt if not found
-      if [ -z "$DOCKER_PASSWORD" ]; then
-        echo "Enter your Docker Hub password or Personal Access Token (PAT)"
-        echo "To create a PAT: https://hub.docker.com/settings/security"
-        echo ""
+      while [ -z "$DOCKER_PASSWORD" ]; do
+        print_error "Password/PAT cannot be empty"
         read -sp "Docker Hub password/PAT: " DOCKER_PASSWORD
         echo ""
-
-        while [ -z "$DOCKER_PASSWORD" ]; do
-          print_error "Password/PAT cannot be empty"
-          read -sp "Docker Hub password/PAT: " DOCKER_PASSWORD
-          echo ""
-        done
-      else
-        print_info "Found saved Docker Hub password/PAT"
-      fi
+      done
     fi
+  fi
 
-    # Save configuration for future runs
-    {
-      echo "DOCKER_USERNAME=$DOCKER_USERNAME"
-      echo "HARNESS_ACCOUNT_ID=$HARNESS_ACCOUNT_ID"
-      echo "HARNESS_PAT=$HARNESS_PAT"
-      echo "DOCKER_PASSWORD=$DOCKER_PASSWORD"
-    } > "$CONFIG_FILE"
-    print_info "Saved configuration to $CONFIG_FILE for future runs"
-    echo ""
+  # Save configuration for future runs
+  {
+    echo "DOCKER_USERNAME=$DOCKER_USERNAME"
+    echo "HARNESS_ACCOUNT_ID=$HARNESS_ACCOUNT_ID"
+    echo "HARNESS_PAT=$HARNESS_PAT"
+    echo "DOCKER_PASSWORD=$DOCKER_PASSWORD"
+  } > "$CONFIG_FILE"
+  print_status "Saved credentials to $CONFIG_FILE for future runs"
+  echo ""
 
-    # Update se-parms.tfvars
-    print_info "Updating kit/se-parms.tfvars..."
-    cat > kit/se-parms.tfvars <<EOF
+  # Update se-parms.tfvars
+  print_info "Updating kit/se-parms.tfvars..."
+  cat > kit/se-parms.tfvars <<EOF
 account_id = "$HARNESS_ACCOUNT_ID"
 
 docker_username = "$DOCKER_USERNAME"
 docker_password = "$DOCKER_PASSWORD"
 EOF
-    print_status "Updated se-parms.tfvars with your configuration"
+  print_status "Updated se-parms.tfvars with your configuration"
 
-    # Run Terraform
-    print_section "Running Terraform"
+  # Check if Terraform has already been applied
+  if [ -f "kit/terraform.tfstate" ] && [ -s "kit/terraform.tfstate" ]; then
+    echo ""
+    print_status "IaC state already exists - Harness resources appear to be configured"
+    print_info "To reconfigure, delete kit/terraform.tfstate or run: cd kit && tofu/terraform destroy"
+    echo ""
+  else
+
+    # Detect and select IaC tool (OpenTofu or Terraform)
+    print_section "Detecting Infrastructure as Code Tool"
+
+    TOFU_CMD=""
+
+    # Check for terraform first (backward compatibility)
+    if command -v terraform &> /dev/null; then
+      TOFU_CMD="terraform"
+      print_status "Found Terraform: $(terraform version | head -n1)"
+      print_info "Using Terraform (backward compatibility)"
+    # Check for tofu (OpenTofu - preferred)
+    elif command -v tofu &> /dev/null; then
+      TOFU_CMD="tofu"
+      print_status "Found OpenTofu: $(tofu version | head -n1)"
+      print_info "Using OpenTofu"
+    else
+      # Neither found - prompt to install OpenTofu
+      print_error "Neither OpenTofu nor Terraform is installed"
+      echo ""
+      echo "This demo requires an Infrastructure as Code tool to provision Harness resources."
+      echo "We recommend OpenTofu (open-source Terraform alternative)."
+      echo ""
+      echo "Installation options:"
+      echo ""
+      echo "macOS (Homebrew):"
+      echo "  brew install opentofu"
+      echo ""
+      echo "Linux (snap):"
+      echo "  snap install --classic opentofu"
+      echo ""
+      echo "Windows (Chocolatey):"
+      echo "  choco install opentofu"
+      echo ""
+      echo "For other installation methods, visit: https://opentofu.org/docs/intro/install/"
+      echo ""
+      read -p "Would you like to install OpenTofu now? (y/n): " INSTALL_TOFU
+
+      if [[ "$INSTALL_TOFU" =~ ^[Yy]$ ]]; then
+        echo ""
+        print_info "Attempting to install OpenTofu via Homebrew..."
+
+        if command -v brew &> /dev/null; then
+          if brew install opentofu; then
+            print_status "OpenTofu installed successfully"
+            TOFU_CMD="tofu"
+          else
+            print_error "OpenTofu installation failed"
+            echo "Please install OpenTofu manually and run this script again."
+            cd ..
+            exit 1
+          fi
+        else
+          print_error "Homebrew not found. Please install OpenTofu manually:"
+          echo "  Visit: https://opentofu.org/docs/intro/install/"
+          cd ..
+          exit 1
+        fi
+      else
+        echo ""
+        print_info "Setup cannot continue without OpenTofu or Terraform"
+        echo "Please install one of the following and run this script again:"
+        echo "  - OpenTofu (recommended): https://opentofu.org/docs/intro/install/"
+        echo "  - Terraform: https://www.terraform.io/downloads"
+        cd ..
+        exit 1
+      fi
+    fi
+
+    # Run IaC tool
+    print_section "Running $TOFU_CMD"
 
     cd kit
 
-    # Check if Terraform is installed
-    if ! command -v terraform &> /dev/null; then
-      print_error "Terraform is not installed. Please install Terraform and try again."
-      cd ..
-      exit 1
-    fi
-
-    # Initialize Terraform
-    print_info "Running terraform init..."
-    if terraform init &> /dev/null; then
-      print_status "Terraform initialized"
+    # Initialize
+    print_info "Running $TOFU_CMD init..."
+    if $TOFU_CMD init &> /dev/null; then
+      print_status "$TOFU_CMD initialized"
     else
-      print_error "Terraform init failed"
+      print_error "$TOFU_CMD init failed"
       cd ..
       exit 1
     fi
 
     # Plan
-    print_info "Running terraform plan (this may take 1-2 minutes)..."
-    if terraform plan -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan &> /dev/null; then
-      print_status "Terraform plan created"
+    print_info "Running $TOFU_CMD plan (this may take 1-2 minutes)..."
+    if $TOFU_CMD plan -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan &> /dev/null; then
+      print_status "$TOFU_CMD plan created"
     else
-      print_error "Terraform plan failed. Run manually to see errors: cd kit && terraform plan -var=\"pat=$HARNESS_PAT\" -var-file=\"se-parms.tfvars\""
+      print_error "$TOFU_CMD plan failed. Run manually to see errors: cd kit && $TOFU_CMD plan -var=\"pat=$HARNESS_PAT\" -var-file=\"se-parms.tfvars\""
       cd ..
       exit 1
     fi
 
     # Apply
-    print_info "Running terraform apply (this may take 3-5 minutes)..."
-    if terraform apply -auto-approve plan.tfplan; then
-      print_status "Terraform apply completed - Harness resources created!"
+    print_info "Running $TOFU_CMD apply (this may take 3-5 minutes)..."
+    if $TOFU_CMD apply -auto-approve plan.tfplan; then
+      print_status "$TOFU_CMD apply completed - Harness resources created!"
     else
-      print_error "Terraform apply failed"
+      print_error "$TOFU_CMD apply failed"
       cd ..
       exit 1
     fi
