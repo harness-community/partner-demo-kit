@@ -254,21 +254,48 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
       done
     fi
 
-    # Save username to config file for future runs (only if file doesn't exist yet)
-    # This preserves any existing credentials that were saved by the Terraform section
-    if [ ! -f "$CONFIG_FILE" ] || [ ! -s "$CONFIG_FILE" ]; then
-      echo "DOCKER_USERNAME=$DOCKER_USERNAME" > "$CONFIG_FILE"
-      print_info "Saved username to $CONFIG_FILE for future runs"
+    # Get Docker password/PAT (need it for both login and saving to config)
+    DOCKER_LOGIN_PASSWORD=""
+
+    # Try to get from config file first
+    if [ -f "$CONFIG_FILE" ]; then
+      DOCKER_LOGIN_PASSWORD=$(grep "DOCKER_PASSWORD=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
     fi
 
-    # Login to Docker Hub
+    # If not found or is a placeholder, prompt for it
+    if [ -z "$DOCKER_LOGIN_PASSWORD" ] || [ "$DOCKER_LOGIN_PASSWORD" = "logged-in-via-docker-desktop" ]; then
+      echo ""
+      print_info "You need to provide your Docker Hub password or Personal Access Token (PAT)"
+      print_info "To create a PAT: https://hub.docker.com/settings/security"
+      echo ""
+      read -sp "Enter your Docker Hub password/PAT: " DOCKER_LOGIN_PASSWORD
+      echo ""
+
+      # Validate that password is not empty
+      while [ -z "$DOCKER_LOGIN_PASSWORD" ]; do
+        print_error "Password/PAT cannot be empty"
+        read -sp "Enter your Docker Hub password/PAT: " DOCKER_LOGIN_PASSWORD
+        echo ""
+      done
+    else
+      print_status "Using cached Docker Hub password/PAT"
+    fi
+
+    # Save credentials to config file for future runs (only if file doesn't exist yet)
+    # This preserves any existing credentials that were saved by the Terraform section
+    if [ ! -f "$CONFIG_FILE" ] || [ ! -s "$CONFIG_FILE" ]; then
+      {
+        echo "DOCKER_USERNAME=$DOCKER_USERNAME"
+        echo "DOCKER_PASSWORD=$DOCKER_LOGIN_PASSWORD"
+      } > "$CONFIG_FILE"
+      print_info "Saved credentials to $CONFIG_FILE for future runs"
+    fi
+
+    # Login to Docker Hub using the password
     echo ""
     print_info "Logging in to Docker Hub..."
-    print_info "You can use your Docker Hub password or Personal Access Token (PAT)"
-    print_info "To create a PAT: https://hub.docker.com/settings/security"
-    echo ""
 
-    if docker login -u "$DOCKER_USERNAME"; then
+    if echo "$DOCKER_LOGIN_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin; then
       print_status "Successfully logged in to Docker Hub"
     else
       print_error "Docker login failed. Please check your credentials and try again."
@@ -382,22 +409,16 @@ if [ "$SKIP_TERRAFORM" = false ]; then
     DOCKER_PASSWORD=$(grep "DOCKER_PASSWORD=" "$CONFIG_FILE" | cut -d'=' -f2)
   fi
 
-  # Check if we're logged in to Docker Hub
-  LOGGED_IN_USER=$(docker info 2>/dev/null | grep "Username:" | awk '{print $2}')
-  if [ -n "$LOGGED_IN_USER" ]; then
-    # Already logged in - we can use a placeholder for Terraform but keep any cached PAT
-    if [ -z "$DOCKER_PASSWORD" ] || [ "$DOCKER_PASSWORD" = "logged-in-via-docker-desktop" ]; then
-      print_status "Docker Hub password not needed (already logged in)"
+  # If still not found, use a placeholder (should have been saved during Docker build section)
+  if [ -z "$DOCKER_PASSWORD" ]; then
+    # Check if we're logged in to Docker Hub (might have been logged in via Docker Desktop on first run)
+    LOGGED_IN_USER=$(docker info 2>/dev/null | grep "Username:" | awk '{print $2}')
+    if [ -n "$LOGGED_IN_USER" ]; then
+      print_status "Using Docker Hub session (logged in via Docker Desktop)"
       DOCKER_PASSWORD="logged-in-via-docker-desktop"
     else
-      print_status "Docker Hub password cached (logged in via Docker Desktop)"
-    fi
-  else
-    # Not logged in via Docker Desktop - need actual password
-    if [ -n "$DOCKER_PASSWORD" ] && [ "$DOCKER_PASSWORD" != "logged-in-via-docker-desktop" ]; then
-      print_status "Using cached Docker Hub password/PAT"
-    else
-      # No valid cached password, need to prompt
+      # This shouldn't happen if the Docker build section ran, but handle it anyway
+      print_info "Docker Hub password not found in cache"
       echo ""
       echo "Enter your Docker Hub password or Personal Access Token (PAT)"
       echo "To create a PAT: https://hub.docker.com/settings/security"
@@ -411,6 +432,8 @@ if [ "$SKIP_TERRAFORM" = false ]; then
         echo ""
       done
     fi
+  else
+    print_status "Using cached Docker Hub password/PAT for Terraform"
   fi
 
   # Save configuration for future runs

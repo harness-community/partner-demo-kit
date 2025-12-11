@@ -184,7 +184,7 @@ The script stores credentials in `.demo-config` (git-ignored) for convenience:
 # Clean up deployed applications only
 ./stop-demo.sh
 
-# Full cleanup (applications + Prometheus + stop cluster)
+# Full cleanup (everything - all options below)
 ./stop-demo.sh --full-cleanup
 ```
 
@@ -192,7 +192,27 @@ The script stores credentials in `.demo-config` (git-ignored) for convenience:
 - `./stop-demo.sh` - Remove deployed applications (frontend/backend)
 - `./stop-demo.sh --delete-prometheus` - Also remove Prometheus monitoring
 - `./stop-demo.sh --stop-cluster` - Also stop Kubernetes cluster (minikube only)
+- `./stop-demo.sh --delete-harness-project` - Delete Harness "Base Demo" project via API
+- `./stop-demo.sh --delete-docker-repo` - Delete Docker Hub harness-demo repository via API
+- `./stop-demo.sh --delete-config-files` - Delete .demo-config, se-parms.tfvars, and IaC state files
 - `./stop-demo.sh --full-cleanup` - Complete cleanup (all of the above)
+
+**API-Based Cleanup Features:**
+
+The script can now clean up Harness and Docker Hub resources using API calls:
+
+- **Harness Project Deletion**: Uses your cached Harness PAT from `.demo-config` to delete the "Base Demo" project and all its resources (pipelines, services, environments, connectors, etc.)
+- **Docker Hub Repository Deletion**: Uses your cached Docker credentials to delete the `harness-demo` repository and all its images
+- **Interactive Prompts**: Both operations require explicit "yes" confirmation before proceeding
+
+**Example Combinations:**
+```bash
+# Clean up everything except Kubernetes
+./stop-demo.sh --delete-harness-project --delete-docker-repo --delete-config-files
+
+# Clean up only cloud resources (keep local infrastructure)
+./stop-demo.sh --delete-harness-project --delete-docker-repo
+```
 
 > **Next Steps**: After running `start-demo.sh` successfully:
 > 1. Navigate to [app.harness.io](https://app.harness.io) and select the **"Base Demo"** project
@@ -471,18 +491,39 @@ kubectl get pods -n harness-delegate-ng
 
 ## Resetting the Demo
 
-To start fresh and reset everything, follow these steps in order:
+To start fresh and reset everything, you have several options:
 
-### Option 1: Using the Cleanup Script (Recommended)
+### Option 1: Complete Automated Cleanup (Recommended)
 
 ```bash
-# Clean up all local infrastructure
+# Clean up EVERYTHING (Harness project, Docker repo, local files, K8s resources)
 ./stop-demo.sh --full-cleanup
 ```
 
-This removes deployed applications, Prometheus, and stops your Kubernetes cluster (minikube only).
+This single command will:
+- Delete the Harness "Base Demo" project via API (with confirmation prompt)
+- Delete the Docker Hub `harness-demo` repository via API (with confirmation prompt)
+- Delete configuration files (.demo-config, se-parms.tfvars, state files)
+- Remove Kubernetes deployments (frontend/backend)
+- Remove Prometheus monitoring
+- Stop Kubernetes cluster (minikube only)
 
-### Option 2: Manual Cleanup
+### Option 2: Selective Automated Cleanup
+
+Choose specific cleanup operations:
+
+```bash
+# Clean up only cloud resources (Harness + Docker Hub)
+./stop-demo.sh --delete-harness-project --delete-docker-repo
+
+# Clean up cloud resources and local config (keeps K8s running)
+./stop-demo.sh --delete-harness-project --delete-docker-repo --delete-config-files
+
+# Clean up only local resources (keeps Harness project)
+./stop-demo.sh --delete-prometheus --stop-cluster --delete-config-files
+```
+
+### Option 3: Manual Cleanup
 
 **Step 1: Clean Kubernetes Resources**
 ```bash
