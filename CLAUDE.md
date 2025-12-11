@@ -74,7 +74,49 @@ docker push dockerhubaccountid/harness-demo:demo-base-<tag>
 
 ## Infrastructure Commands
 
-### Terraform (Harness Resource Provisioning)
+### Automated Setup (Recommended)
+
+The repository includes automation scripts for complete demo setup:
+
+**start-demo.sh** - Automated infrastructure and Harness resource setup:
+```bash
+# Make executable (first time only)
+chmod +x start-demo.sh stop-demo.sh
+
+# Run complete setup
+./start-demo.sh
+
+# Options:
+./start-demo.sh --skip-docker-build   # Skip backend image build
+./start-demo.sh --skip-terraform      # Skip Harness resource creation
+```
+
+**What start-demo.sh automates:**
+1. Checks prerequisites (Docker, kubectl, Terraform)
+2. Detects and starts Kubernetes (minikube/Rancher Desktop)
+3. Deploys Prometheus for continuous verification
+4. Authenticates to Docker Hub (smart detection of existing login)
+5. Builds and pushes backend Docker image
+6. **Collects Harness credentials** (Account ID, PAT, Docker password)
+7. **Updates kit/se-parms.tfvars** automatically
+8. **Runs Terraform** (init, plan, apply) to create all Harness resources
+9. Saves configuration to `.demo-config` for subsequent runs
+
+**stop-demo.sh** - Cleanup script:
+```bash
+./stop-demo.sh                    # Remove deployed applications
+./stop-demo.sh --delete-prometheus # Also remove Prometheus
+./stop-demo.sh --stop-cluster     # Also stop minikube
+./stop-demo.sh --full-cleanup     # Complete cleanup
+```
+
+**Credential Management:**
+- Credentials saved to `.demo-config` (git-ignored)
+- Reuses values on subsequent runs
+- Supports environment variable `DEMO_BASE_PAT` for Harness PAT
+- Detects Docker Desktop login automatically
+
+### Terraform (Harness Resource Provisioning) - Manual Method
 
 **Important**: Set the Harness PAT as an environment variable on Mac/Linux:
 ```bash

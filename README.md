@@ -78,10 +78,10 @@ chmod +x start-demo.sh stop-demo.sh
 
 ### What the Startup Script Does
 
-The `start-demo.sh` script automates the entire local infrastructure setup:
+The `start-demo.sh` script automates the **complete demo setup** from local infrastructure to Harness resources:
 
 **1. Prerequisites Check**
-- Verifies Docker, kubectl, and other required tools are installed
+- Verifies Docker, kubectl, Terraform, and other required tools are installed
 - Checks that Docker daemon is running
 
 **2. Kubernetes Detection & Startup**
@@ -108,38 +108,68 @@ The `start-demo.sh` script automates the entire local infrastructure setup:
 - Pushes to your Docker Hub repository
 - Provides clear error messages if build or push fails
 
-**6. Status Display**
-- Shows cluster status, Prometheus deployment, and next steps
-- Provides guidance for completing the Harness setup
+**6. Harness Configuration & Terraform** (Automated!)
+- **Smart credential collection**: Reuses values from previous runs or prompts for:
+  - Harness Account ID (from URL when viewing your profile)
+  - Harness Personal Access Token (PAT)
+  - Docker Hub password/PAT (if not already logged in)
+- **Automatic configuration**: Updates `kit/se-parms.tfvars` with your values
+- **Terraform execution**: Runs `terraform init`, `plan`, and `apply` automatically
+- **Idempotent**: Skips if Terraform state already exists
+- **Creates all Harness resources**: Project, connectors, environments, services, monitored services, code repository, etc.
+
+**7. Status Display**
+- Shows cluster status, Prometheus deployment, and Terraform results
+- Provides clear next steps based on what was configured
 
 ### Script Options
 
 ```bash
 # Skip Docker image build (if you already have the backend image)
 ./start-demo.sh --skip-docker-build
+
+# Skip Terraform/Harness setup (useful for infrastructure-only testing)
+./start-demo.sh --skip-terraform
+
+# Combine options
+./start-demo.sh --skip-docker-build --skip-terraform
 ```
 
 ### First Run vs Subsequent Runs
 
-**First Run:**
-- Will prompt for Docker Hub username (unless you're already logged in via Docker Desktop)
-- Will ask for password/PAT when logging in to Docker Hub
-- Saves username to `.demo-config` for next time
-- Takes ~3-5 minutes (including Docker build)
+**First Run (Complete Setup):**
+- Prompts for:
+  - Docker Hub username (unless already logged in via Docker Desktop)
+  - Docker Hub password/PAT
+  - Harness Account ID
+  - Harness Personal Access Token (PAT)
+- Saves all credentials to `.demo-config` for future runs
+- Creates Harness resources via Terraform
+- Takes ~8-12 minutes total (including Docker build and Terraform apply)
 
 **Subsequent Runs:**
-- If you're logged in to Docker Hub via Docker Desktop: No prompts needed
-- If not logged in: Uses saved username from `.demo-config`, only prompts for password/PAT
-- Skips building Docker image if it already exists (use `--skip-docker-build`)
-- Takes ~2-3 minutes
+- Detects existing Terraform state and skips Harness resource creation
+- Reuses saved credentials from `.demo-config`
+- Only prompts if saved credentials are missing or invalid
+- Takes ~2-3 minutes for infrastructure verification
 
-### Docker Hub Authentication Tips
+### Credential Management
 
-- **Using Docker Desktop**: If you log in to Docker Hub through Docker Desktop, the script detects this and skips authentication
-- **Using PAT**: When prompted for password, you can paste a Personal Access Token instead
-  - Create a PAT at: https://hub.docker.com/settings/security
-  - PATs are more secure than passwords and recommended for automation
-- **Username Saved**: Your Docker Hub username is saved to `.demo-config` (not committed to Git)
+The script stores credentials in `.demo-config` (git-ignored) for convenience:
+- **Docker Hub username** - Reused for subsequent runs
+- **Harness Account ID** - Saved to avoid re-entering
+- **Harness PAT** - Cached for convenience (can also use `DEMO_BASE_PAT` env var)
+- **Docker Hub password/PAT** - Saved for Terraform configuration
+
+**Security Notes:**
+- `.demo-config` is automatically excluded from Git via `.gitignore`
+- Use Personal Access Tokens (PATs) instead of passwords when possible
+- Docker Hub PAT: https://hub.docker.com/settings/security
+- Harness PAT: Profile > My API Keys & Tokens
+
+**Using Docker Desktop:**
+- If you log in to Docker Hub through Docker Desktop, the script detects this and reuses your session
+- You won't be prompted for Docker credentials during the build phase
 
 ### When Finished with the Demo
 
@@ -157,7 +187,10 @@ The `start-demo.sh` script automates the entire local infrastructure setup:
 - `./stop-demo.sh --stop-cluster` - Also stop Kubernetes cluster (minikube only)
 - `./stop-demo.sh --full-cleanup` - Complete cleanup (all of the above)
 
-> **Next Steps**: After running `start-demo.sh`, proceed to Step 6 (Configure Terraform Variables) below to complete the Harness platform setup.
+> **Next Steps**: After running `start-demo.sh` successfully:
+> 1. Navigate to [app.harness.io](https://app.harness.io) and select the **"Base Demo"** project
+> 2. Configure Harness Code Repository (see Step 8 in Manual Setup below)
+> 3. Follow the lab guides in the [markdown/](markdown/) directory
 
 ---
 
@@ -266,6 +299,8 @@ docker push dockerhubaccountid/harness-demo:backend-latest
 
 ### Step 6: Configure Terraform Variables
 
+> **Note**: The automated `start-demo.sh` script handles this step automatically. Only follow these manual steps if you skipped the automated setup or used `--skip-terraform`.
+
 ```bash
 # Navigate to kit directory
 cd ../kit
@@ -284,6 +319,8 @@ docker_password = "your-dockerhub-pat"
 **Important**: Also update `dockerhubaccountid` in [kit/main.tf](kit/main.tf) (line ~300) with your Docker Hub username.
 
 ### Step 7: Run Terraform to Create Harness Resources
+
+> **Note**: The automated `start-demo.sh` script handles this step automatically. Only follow these manual steps if you skipped the automated setup or used `--skip-terraform`.
 
 ```bash
 # Set your Harness API token as an environment variable (Mac/Linux)
