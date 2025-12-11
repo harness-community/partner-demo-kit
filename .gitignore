@@ -46,4 +46,6 @@ next-env.d.ts
 
 # Claude
 .claude_config.json
-CLAUDE.md
+
+# Demo configuration
+.demo-config

@@ -74,32 +74,90 @@ chmod +x start-demo.sh stop-demo.sh
 
 # Start all local infrastructure
 ./start-demo.sh
-
-# The script will:
-# - Detect and start your Kubernetes cluster (minikube or Rancher Desktop)
-# - Deploy Prometheus for monitoring
-# - Build and push the backend Docker image
-# - Verify everything is running
 ```
 
-**Script Options:**
-- `./start-demo.sh --skip-docker-build` - Skip building/pushing Docker images
+### What the Startup Script Does
 
-**When finished with the demo:**
+The `start-demo.sh` script automates the entire local infrastructure setup:
+
+**1. Prerequisites Check**
+- Verifies Docker, kubectl, and other required tools are installed
+- Checks that Docker daemon is running
+
+**2. Kubernetes Detection & Startup**
+- Automatically detects your Kubernetes environment (minikube, Rancher Desktop, or other)
+- Starts minikube if needed and enables metrics-server addon
+- Verifies cluster connectivity
+
+**3. Prometheus Deployment**
+- Creates monitoring namespace if it doesn't exist
+- Deploys Prometheus for continuous verification metrics
+- Waits for Prometheus to be ready
+
+**4. Docker Hub Authentication** (Smart Detection)
+- **If already logged in** (via Docker Desktop): Uses existing credentials automatically
+- **If not logged in**: Checks for saved username in these locations (in order):
+  1. Local `.demo-config` file (from previous runs)
+  2. `kit/se-parms.tfvars` (Terraform configuration)
+  3. Interactive prompt (if not found)
+- Saves your username to `.demo-config` for future runs
+- Prompts for login with helpful instructions about using a Personal Access Token (PAT)
+
+**5. Backend Image Build & Push**
+- Builds the Django backend Docker image
+- Pushes to your Docker Hub repository
+- Provides clear error messages if build or push fails
+
+**6. Status Display**
+- Shows cluster status, Prometheus deployment, and next steps
+- Provides guidance for completing the Harness setup
+
+### Script Options
+
 ```bash
-# Clean up deployed applications
+# Skip Docker image build (if you already have the backend image)
+./start-demo.sh --skip-docker-build
+```
+
+### First Run vs Subsequent Runs
+
+**First Run:**
+- Will prompt for Docker Hub username (unless you're already logged in via Docker Desktop)
+- Will ask for password/PAT when logging in to Docker Hub
+- Saves username to `.demo-config` for next time
+- Takes ~3-5 minutes (including Docker build)
+
+**Subsequent Runs:**
+- If you're logged in to Docker Hub via Docker Desktop: No prompts needed
+- If not logged in: Uses saved username from `.demo-config`, only prompts for password/PAT
+- Skips building Docker image if it already exists (use `--skip-docker-build`)
+- Takes ~2-3 minutes
+
+### Docker Hub Authentication Tips
+
+- **Using Docker Desktop**: If you log in to Docker Hub through Docker Desktop, the script detects this and skips authentication
+- **Using PAT**: When prompted for password, you can paste a Personal Access Token instead
+  - Create a PAT at: https://hub.docker.com/settings/security
+  - PATs are more secure than passwords and recommended for automation
+- **Username Saved**: Your Docker Hub username is saved to `.demo-config` (not committed to Git)
+
+### When Finished with the Demo
+
+```bash
+# Clean up deployed applications only
 ./stop-demo.sh
 
-# Full cleanup (including Prometheus and stop cluster)
+# Full cleanup (applications + Prometheus + stop cluster)
 ./stop-demo.sh --full-cleanup
 ```
 
 **Shutdown Script Options:**
-- `./stop-demo.sh --delete-prometheus` - Also remove Prometheus
-- `./stop-demo.sh --stop-cluster` - Stop Kubernetes cluster (minikube only)
-- `./stop-demo.sh --full-cleanup` - Complete cleanup
+- `./stop-demo.sh` - Remove deployed applications (frontend/backend)
+- `./stop-demo.sh --delete-prometheus` - Also remove Prometheus monitoring
+- `./stop-demo.sh --stop-cluster` - Also stop Kubernetes cluster (minikube only)
+- `./stop-demo.sh --full-cleanup` - Complete cleanup (all of the above)
 
-> **Note**: After running `start-demo.sh`, proceed to Step 6 (Configure Terraform Variables) below to complete the Harness setup.
+> **Next Steps**: After running `start-demo.sh`, proceed to Step 6 (Configure Terraform Variables) below to complete the Harness platform setup.
 
 ---
 
@@ -356,29 +414,67 @@ kubectl get pods -n harness-delegate-ng
 
 ## Resetting the Demo
 
-To start fresh and reset everything:
+To start fresh and reset everything, follow these steps in order:
 
-**1. Delete Harness Resources**:
-- Navigate to Harness UI > Code Repository > Manage Repository
-  - Delete "partner_demo_kit" repository
-- Navigate to Projects
-  - Delete "Base Demo" project
+### Option 1: Using the Cleanup Script (Recommended)
 
-**2. Clean Local Terraform State**:
 ```bash
-cd kit
-git clean -dxf  # WARNING: This removes all untracked files
+# Clean up all local infrastructure
+./stop-demo.sh --full-cleanup
 ```
 
-**3. Delete Docker Hub Repository**:
-- Go to Docker Hub and delete the "harness-demo" repository
+This removes deployed applications, Prometheus, and stops your Kubernetes cluster (minikube only).
 
-**4. Clean Kubernetes Resources**:
+### Option 2: Manual Cleanup
+
+**Step 1: Clean Kubernetes Resources**
 ```bash
-kubectl delete deployment frontend-deployment
-kubectl delete service web-frontend-svc
-kubectl delete deployment backend-deployment
-kubectl delete service web-backend-svc
+# Delete deployed applications
+kubectl delete deployment frontend-deployment --ignore-not-found=true
+kubectl delete service web-frontend-svc --ignore-not-found=true
+kubectl delete deployment backend-deployment --ignore-not-found=true
+kubectl delete service web-backend-svc --ignore-not-found=true
+
+# Delete Prometheus (optional)
+kubectl delete -f kit/prometheus.yml -n monitoring --ignore-not-found=true
+kubectl delete namespace monitoring --ignore-not-found=true
+```
+
+**Step 2: Delete Harness Resources**
+
+> **Important**: Delete Harness resources through the UI **before** running `terraform destroy`. This ensures proper cleanup of all dependencies.
+
+1. Navigate to Harness UI > **Code Repository** > Manage Repository
+   - Delete **"partner_demo_kit"** repository
+2. Navigate to **Projects**
+   - Delete **"Base Demo"** project (this removes all project resources)
+
+**Step 3: Clean Terraform State**
+
+After deleting Harness resources through the UI:
+
+```bash
+cd kit
+
+# Option A: Terraform destroy (may have some errors - safe to ignore)
+terraform destroy -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars"
+
+# Option B: Clean slate - remove all Terraform state
+git clean -dxf  # WARNING: Removes all untracked files including terraform.tfstate
+```
+
+> **Note**: `terraform destroy` may show errors for resources already deleted through the Harness UI. This is expected and safe to ignore. The cleanup script handles this automatically.
+
+**Step 4: Clean Docker Hub (Optional)**
+- Navigate to Docker Hub
+- Delete the **"harness-demo"** repository
+
+**Step 5: Stop Kubernetes (Optional)**
+```bash
+# For minikube
+minikube stop
+
+# For Rancher Desktop - stop through the UI
 ```
 
 ## Resources & Support

@@ -84,13 +84,34 @@ If Harness Cloud is not available, you can use your local Kubernetes cluster:
      ```
 4. Click **Apply Changes**
 
-> **What is Test Intelligence?**
-> Test Intelligence accelerates test cycles by up to 80% by running only relevant tests based on code changes. This means:
-> - Faster builds
-> - Shorter feedback loops
-> - Significant cost savings
+> **Understanding Test Intelligence**:
 >
-> After the first full test run, Test Intelligence will automatically detect which tests need to run based on your code changes.
+> **The Problem**: Traditional CI systems run your entire test suite on every commit, even when only a small part of the codebase changed. This leads to:
+> - Wasted time waiting for irrelevant tests to run
+> - Higher infrastructure costs
+> - Slower developer feedback loops
+> - Reduced productivity
+>
+> **The Solution**: Test Intelligence uses ML to analyze:
+> - Code changes in your commit
+> - Historical test results and failures
+> - Code coverage data
+> - Dependencies between code and tests
+>
+> **The Result**: Test Intelligence automatically selects only the tests that are relevant to your changes:
+> - **80% faster** test execution on average
+> - **Same confidence** - catches the same bugs as running all tests
+> - **Automatic** - no configuration or test tagging required
+> - **Learns over time** - gets smarter with each run
+>
+> **How It Works in This Demo**:
+> - **First run**: Runs all tests to establish a baseline
+> - **Subsequent runs**: Only runs tests affected by code changes
+> - **Example**: If you only change `backend/views.py`, it won't run frontend tests
+>
+> This is particularly powerful for large codebases with thousands of tests where a typical commit only affects a small subset.
+
+> **Note**: While this demo uses a small test suite (so you won't see dramatic time savings), the same technology scales to save hours on enterprise test suites.
 
 ## Step 5: Add Compile Step (Using Template)
 

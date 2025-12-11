@@ -11,6 +11,16 @@ This lab adds Continuous Verification (CV) to your backend canary deployment. Ha
 - Prometheus running in your Kubernetes cluster
 - Monitored service `backend_dev` created by Terraform
 
+> **About the Monitored Service**:
+>
+> The Monitored Service (`backend_dev`) was **automatically created by Terraform** during setup. This service:
+> - Links the `backend` service to the `Dev` environment
+> - Configures Prometheus as the health source
+> - Defines which metrics to collect and analyze
+> - Sets up the ML baseline for anomaly detection
+>
+> This demonstrates how platform teams can pre-configure monitoring for development teams, eliminating manual setup and ensuring consistency across services.
+
 ## Step 1: Add Verify Step to Backend Deployment
 
 1. In the Pipeline Studio, navigate to the **Backend - Deployment** stage
@@ -55,7 +65,16 @@ Watch the pipeline execute through all stages:
 - ✅ **Frontend - Deployment** - Rolling deployment
 - ✅ **Backend - Deployment** - Canary deployment with verification
 
-The **Verify** step will take 5 minutes to complete while it analyzes metrics from Prometheus.
+**Expected Timing for the Verify Step:**
+- **First time running**: ~8 minutes total
+  - 1-2 minutes for the delegate to pick up the verification task
+  - 1 minute for initial metric collection
+  - 5 minutes for the actual verification analysis
+- **Subsequent runs**: ~6-7 minutes (delegate warm-up is faster)
+
+> **Note**: The delegate running on your local machine may take a minute or two to pick up the verification task on first run. This is normal behavior as the delegate initializes the verification process and begins collecting metrics from Prometheus.
+
+The **Verify** step will show "Initializing..." while the delegate prepares, then "In Progress" during the 5-minute analysis period.
 
 ## Test the Application During Verification
 

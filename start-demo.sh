@@ -150,30 +150,36 @@ else
   print_status "Monitoring namespace created"
 fi
 
-# Check if Prometheus is already deployed
-if kubectl get pods -n monitoring | grep -q prometheus-k8s-0; then
-  if kubectl get pods -n monitoring | grep prometheus-k8s-0 | grep -q "Running"; then
-    print_status "Prometheus is already running"
-  else
-    print_info "Prometheus pod exists but not running, redeploying..."
-    kubectl -n monitoring delete -f kit/prometheus.yml --ignore-not-found=true &> /dev/null
-    sleep 5
-    kubectl -n monitoring apply -f kit/prometheus.yml
-    print_status "Prometheus redeployed"
-  fi
+# Check if Prometheus is already deployed and running
+PROMETHEUS_ALREADY_RUNNING=false
+if kubectl get pods -n monitoring -l app=prometheus 2>/dev/null | grep -q "Running"; then
+  print_status "Prometheus is already running"
+  PROMETHEUS_ALREADY_RUNNING=true
+elif kubectl get deployment -n monitoring prometheus-deployment &> /dev/null; then
+  print_info "Prometheus deployment exists but not running, redeploying..."
+  kubectl -n monitoring delete -f kit/prometheus.yml --ignore-not-found=true &> /dev/null
+  sleep 5
+  kubectl -n monitoring apply -f kit/prometheus.yml &> /dev/null
+  print_status "Prometheus redeployed"
 else
   print_info "Deploying Prometheus..."
-  kubectl -n monitoring apply -f kit/prometheus.yml
+  kubectl -n monitoring apply -f kit/prometheus.yml &> /dev/null
   print_status "Prometheus deployed"
 fi
 
-# Wait for Prometheus to be ready
-print_info "Waiting for Prometheus to be ready..."
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=prometheus -n monitoring --timeout=120s &> /dev/null || true
-if kubectl get pods -n monitoring | grep prometheus-k8s-0 | grep -q "Running"; then
-  print_status "Prometheus is running"
-else
-  print_error "Prometheus failed to start. Check with: kubectl get pods -n monitoring"
+# Wait for Prometheus to be ready (only if we just deployed or redeployed it)
+if [ "$PROMETHEUS_ALREADY_RUNNING" = false ]; then
+  print_info "Waiting for Prometheus to be ready..."
+  if kubectl wait --for=condition=ready pod -l app=prometheus -n monitoring --timeout=120s &> /dev/null; then
+    print_status "Prometheus is ready"
+  else
+    # Double-check if it's actually running despite wait timeout
+    if kubectl get pods -n monitoring -l app=prometheus 2>/dev/null | grep -q "Running"; then
+      print_status "Prometheus is running"
+    else
+      print_error "Prometheus failed to start. Check with: kubectl get pods -n monitoring"
+    fi
+  fi
 fi
 
 # Build and push Docker images (optional)
@@ -181,37 +187,107 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
   print_section "Building Backend Docker Image"
 
   print_info "Checking Docker Hub authentication..."
-  # Try to get Docker Hub username from config
+
+  # Configuration file to store username
+  CONFIG_FILE=".demo-config"
   DOCKER_USERNAME=""
-  if [ -f "kit/se-parms.tfvars" ]; then
-    DOCKER_USERNAME=$(grep docker_username kit/se-parms.tfvars | cut -d'"' -f2 2>/dev/null || echo "")
-  fi
+  LOGGED_IN_USER=""
 
-  if [ -z "$DOCKER_USERNAME" ]; then
-    print_info "Docker Hub username not found in kit/se-parms.tfvars"
-    read -p "Enter your Docker Hub username: " DOCKER_USERNAME
-  else
-    print_info "Found Docker Hub username: $DOCKER_USERNAME"
-  fi
+  # Check if already logged in and get current username
+  LOGGED_IN_USER=$(docker info 2>/dev/null | grep "Username:" | awk '{print $2}')
 
-  # Check if logged in to Docker Hub
-  if docker info 2>/dev/null | grep -q "Username"; then
-    print_status "Already logged in to Docker Hub"
+  if [ -n "$LOGGED_IN_USER" ]; then
+    print_status "Already logged in to Docker Hub as: $LOGGED_IN_USER"
+    DOCKER_USERNAME="$LOGGED_IN_USER"
   else
-    print_info "Please log in to Docker Hub"
-    docker login -u "$DOCKER_USERNAME"
+    # Try to get username from local config file
+    if [ -f "$CONFIG_FILE" ]; then
+      DOCKER_USERNAME=$(grep "DOCKER_USERNAME=" "$CONFIG_FILE" | cut -d'=' -f2)
+      if [ -n "$DOCKER_USERNAME" ]; then
+        # Check if saved username is a placeholder
+        case "$DOCKER_USERNAME" in
+          username|dockerhubaccountid|your-username|your-dockerhub-username|DOCKERHUB_USERNAME)
+            print_info "Found placeholder username in saved config: $DOCKER_USERNAME"
+            print_info "Please provide your actual Docker Hub username"
+            DOCKER_USERNAME=""
+            ;;
+          *)
+            print_info "Found saved Docker Hub username: $DOCKER_USERNAME"
+            ;;
+        esac
+      fi
+    fi
+
+    # Try to get username from Terraform config if still not found
+    if [ -z "$DOCKER_USERNAME" ] && [ -f "kit/se-parms.tfvars" ]; then
+      DOCKER_USERNAME=$(grep docker_username kit/se-parms.tfvars | cut -d'"' -f2 2>/dev/null || echo "")
+
+      # Check if username looks like a placeholder
+      if [ -n "$DOCKER_USERNAME" ]; then
+        case "$DOCKER_USERNAME" in
+          username|dockerhubaccountid|your-username|your-dockerhub-username|DOCKERHUB_USERNAME)
+            print_info "Found placeholder username in kit/se-parms.tfvars: $DOCKER_USERNAME"
+            print_info "Please provide your actual Docker Hub username"
+            DOCKER_USERNAME=""
+            ;;
+          *)
+            print_info "Found Docker Hub username in kit/se-parms.tfvars: $DOCKER_USERNAME"
+            ;;
+        esac
+      fi
+    fi
+
+    # Prompt for username if still not found or was a placeholder
+    if [ -z "$DOCKER_USERNAME" ]; then
+      echo ""
+      read -p "Enter your Docker Hub username: " DOCKER_USERNAME
+
+      # Validate that username is not empty
+      while [ -z "$DOCKER_USERNAME" ]; do
+        print_error "Username cannot be empty"
+        read -p "Enter your Docker Hub username: " DOCKER_USERNAME
+      done
+    fi
+
+    # Save username to config file for future runs
+    echo "DOCKER_USERNAME=$DOCKER_USERNAME" > "$CONFIG_FILE"
+    print_info "Saved username to $CONFIG_FILE for future runs"
+
+    # Login to Docker Hub
+    echo ""
+    print_info "Logging in to Docker Hub..."
+    print_info "You can use your Docker Hub password or Personal Access Token (PAT)"
+    print_info "To create a PAT: https://hub.docker.com/settings/security"
+    echo ""
+
+    if docker login -u "$DOCKER_USERNAME"; then
+      print_status "Successfully logged in to Docker Hub"
+    else
+      print_error "Docker login failed. Please check your credentials and try again."
+      exit 1
+    fi
   fi
 
   # Build backend image
   print_info "Building backend Docker image (this may take a few minutes)..."
   cd backend
-  docker build -t "$DOCKER_USERNAME/harness-demo:backend-latest" . --quiet
-  print_status "Backend image built: $DOCKER_USERNAME/harness-demo:backend-latest"
+  if docker build -t "$DOCKER_USERNAME/harness-demo:backend-latest" . --quiet; then
+    print_status "Backend image built: $DOCKER_USERNAME/harness-demo:backend-latest"
+  else
+    print_error "Docker build failed"
+    cd ..
+    exit 1
+  fi
 
   # Push backend image
   print_info "Pushing backend image to Docker Hub..."
-  docker push "$DOCKER_USERNAME/harness-demo:backend-latest" --quiet
-  print_status "Backend image pushed to Docker Hub"
+  if docker push "$DOCKER_USERNAME/harness-demo:backend-latest" --quiet; then
+    print_status "Backend image pushed to Docker Hub"
+  else
+    print_error "Docker push failed. Check that you have access to docker.io/$DOCKER_USERNAME/harness-demo"
+    cd ..
+    exit 1
+  fi
   cd ..
 else
   print_info "Skipping Docker image build (--skip-docker-build flag used)"

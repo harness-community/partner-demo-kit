@@ -98,6 +98,8 @@ Watch the deployment stages execute:
 - ✅ **Build** stage - Runs all CI steps from Lab 2
 - ✅ **Frontend - Deployment** - Deploys to Kubernetes
 
+> **First Deployment Note**: On your first deployment, the delegate may take 1-2 minutes to pick up the deployment task. This is normal as the delegate on your local machine initializes and connects to Harness. Subsequent deployments will be faster.
+
 ## Verify the Deployment
 
 ### Check Kubernetes Resources
