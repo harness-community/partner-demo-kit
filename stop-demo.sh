@@ -279,68 +279,80 @@ fi
 
 fi  # End of K8S_AVAILABLE check
 
-# Delete Harness Project (optional)
+# Delete Harness Resources (optional)
 if [ "$DELETE_HARNESS_PROJECT" = true ]; then
-  print_section "Deleting Harness Project"
+  print_section "Deleting Harness Resources"
 
-  # Check if we have credentials, prompt if missing
-  if [ -z "$HARNESS_ACCOUNT_ID" ]; then
-    echo ""
-    print_info "Harness Account ID not found in config files"
-    echo "Your Harness Account ID can be found in the URL when viewing your profile"
-    echo "Example: https://app.harness.io/ng/account/VEuU4vZ6QmSJZcgvnccqYQ/settings/overview"
-    echo "         (the ID is: VEuU4vZ6QmSJZcgvnccqYQ)"
-    echo ""
-    read -p "Enter your Harness Account ID (or press Enter to skip): " HARNESS_ACCOUNT_ID
-  fi
+  # Check if IaC state file exists
+  if [ ! -f "kit/terraform.tfstate" ] || [ ! -s "kit/terraform.tfstate" ]; then
+    print_info "No IaC state file found - Harness resources may not exist or were already deleted"
+    read -p "Do you want to try deleting via API anyway? (yes/no): " TRY_API
 
-  if [ -z "$HARNESS_PAT" ]; then
-    echo ""
-    print_info "Harness PAT not found in config files"
-    echo "You can use the DEMO_BASE_PAT environment variable or enter it now"
-    echo ""
-    read -p "Enter your Harness PAT (or press Enter to skip): " HARNESS_PAT
-  fi
-
-  # Check again after prompting
-  if [ -z "$HARNESS_ACCOUNT_ID" ] || [ -z "$HARNESS_PAT" ]; then
-    print_info "Skipping Harness project deletion (credentials not provided)"
+    if [ "$TRY_API" != "yes" ]; then
+      print_info "Skipping Harness resource deletion"
+    else
+      print_info "API-based deletion not implemented - use Harness UI to manually delete resources"
+    fi
   else
+    # We have a state file, use IaC to destroy
+    print_info "Found IaC state file - will use OpenTofu/Terraform to destroy resources"
+
     # Prompt for confirmation
     echo ""
-    echo -e "${YELLOW}WARNING: This will permanently delete the 'Base Demo' project and all its resources:${NC}"
+    echo -e "${YELLOW}WARNING: This will permanently delete all Harness resources created by IaC:${NC}"
+    echo "  - 'Base Demo' project"
     echo "  - Code repositories"
     echo "  - Pipelines"
     echo "  - Services"
     echo "  - Environments"
     echo "  - Connectors"
-    echo "  - All other project resources"
+    echo "  - All other resources in the state file"
     echo ""
-    read -p "Are you sure you want to delete the Harness 'Base Demo' project? (yes/no): " CONFIRM_HARNESS
+    read -p "Are you sure you want to destroy these Harness resources? (yes/no): " CONFIRM_HARNESS
 
     if [ "$CONFIRM_HARNESS" = "yes" ]; then
-      print_info "Deleting Harness project 'Base Demo'..."
+      # Need Harness PAT for destroy
+      if [ -z "$HARNESS_PAT" ]; then
+        echo ""
+        print_info "Harness PAT not found in config files"
+        echo "You can use the DEMO_BASE_PAT environment variable or enter it now"
+        echo ""
+        read -p "Enter your Harness PAT (or press Enter to skip): " HARNESS_PAT
+      fi
 
-      # Project identifier (as created by Terraform)
-      PROJECT_ID="Base_Demo"
-      ORG_ID="default"
-
-      # Call Harness API to delete project
-      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
-        "https://app.harness.io/ng/api/projects/${PROJECT_ID}?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=${ORG_ID}" \
-        -H "x-api-key: ${HARNESS_PAT}" \
-        -H "Content-Type: application/json")
-
-      if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "204" ]; then
-        print_status "Harness project 'Base Demo' deleted successfully"
-      elif [ "$HTTP_CODE" = "404" ]; then
-        print_info "Harness project 'Base Demo' not found (may already be deleted)"
+      if [ -z "$HARNESS_PAT" ]; then
+        print_info "Skipping Harness resource deletion (PAT not provided)"
       else
-        print_error "Failed to delete Harness project (HTTP $HTTP_CODE)"
-        print_info "You may need to delete it manually through the Harness UI"
+        # Detect which IaC tool to use
+        TOFU_CMD=""
+        if command -v tofu &> /dev/null; then
+          TOFU_CMD="tofu"
+          print_status "Using OpenTofu for destroy"
+        elif command -v terraform &> /dev/null; then
+          TOFU_CMD="terraform"
+          print_status "Using Terraform for destroy"
+        else
+          print_error "Neither OpenTofu nor Terraform found"
+          print_info "Cannot destroy Harness resources without IaC tool"
+          print_info "Please install OpenTofu or Terraform, or delete resources manually through Harness UI"
+        fi
+
+        if [ -n "$TOFU_CMD" ]; then
+          print_info "Running $TOFU_CMD destroy (this may take 2-3 minutes)..."
+
+          cd kit
+          if $TOFU_CMD destroy -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -auto-approve; then
+            print_status "Harness resources destroyed successfully"
+          else
+            print_error "$TOFU_CMD destroy encountered errors"
+            print_info "Some resources may have been deleted. Check kit/terraform.tfstate"
+            print_info "You may need to manually delete remaining resources through Harness UI"
+          fi
+          cd ..
+        fi
       fi
     else
-      print_info "Skipping Harness project deletion (user cancelled)"
+      print_info "Skipping Harness resource deletion (user cancelled)"
     fi
   fi
 fi

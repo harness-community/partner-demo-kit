@@ -196,89 +196,126 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
   # Configuration file to store username
   CONFIG_FILE=".demo-config"
   DOCKER_USERNAME=""
+  DOCKER_LOGIN_PASSWORD=""
   LOGGED_IN_USER=""
 
   # Check if already logged in and get current username
   LOGGED_IN_USER=$(docker info 2>/dev/null | grep "Username:" | awk '{print $2}')
 
   if [ -n "$LOGGED_IN_USER" ]; then
-    print_status "Already logged in to Docker Hub as: $LOGGED_IN_USER"
+    print_status "Detected Docker Hub session: $LOGGED_IN_USER"
+  fi
+
+  # Load cached username/password if available
+  if [ -f "$CONFIG_FILE" ]; then
+    DOCKER_USERNAME=$(grep "DOCKER_USERNAME=" "$CONFIG_FILE" | cut -d'=' -f2)
+    DOCKER_LOGIN_PASSWORD=$(grep "DOCKER_PASSWORD=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+  fi
+
+  if [ -n "$DOCKER_USERNAME" ]; then
+    case "$DOCKER_USERNAME" in
+      username|dockerhubaccountid|your-username|your-dockerhub-username|DOCKERHUB_USERNAME)
+        print_info "Found placeholder username in saved config: $DOCKER_USERNAME"
+        print_info "Please provide your actual Docker Hub username"
+        DOCKER_USERNAME=""
+        ;;
+      *)
+        print_info "Found saved Docker Hub username: $DOCKER_USERNAME"
+        ;;
+    esac
+  fi
+
+  # Try to get username from Terraform config if still not found
+  if [ -z "$DOCKER_USERNAME" ] && [ -f "kit/se-parms.tfvars" ]; then
+    DOCKER_USERNAME=$(grep docker_username kit/se-parms.tfvars | cut -d'"' -f2 2>/dev/null || echo "")
+
+    # Check if username looks like a placeholder
+    if [ -n "$DOCKER_USERNAME" ]; then
+      case "$DOCKER_USERNAME" in
+        username|dockerhubaccountid|your-username|your-dockerhub-username|DOCKERHUB_USERNAME)
+          print_info "Found placeholder username in kit/se-parms.tfvars: $DOCKER_USERNAME"
+          print_info "Please provide your actual Docker Hub username"
+          DOCKER_USERNAME=""
+          ;;
+        *)
+          print_info "Found Docker Hub username in kit/se-parms.tfvars: $DOCKER_USERNAME"
+          ;;
+      esac
+    fi
+  fi
+
+  # Fall back to currently logged-in user if no cached username
+  if [ -z "$DOCKER_USERNAME" ] && [ -n "$LOGGED_IN_USER" ]; then
     DOCKER_USERNAME="$LOGGED_IN_USER"
-  else
-    # Try to get username from local config file
-    if [ -f "$CONFIG_FILE" ]; then
-      DOCKER_USERNAME=$(grep "DOCKER_USERNAME=" "$CONFIG_FILE" | cut -d'=' -f2)
-      if [ -n "$DOCKER_USERNAME" ]; then
-        # Check if saved username is a placeholder
-        case "$DOCKER_USERNAME" in
-          username|dockerhubaccountid|your-username|your-dockerhub-username|DOCKERHUB_USERNAME)
-            print_info "Found placeholder username in saved config: $DOCKER_USERNAME"
-            print_info "Please provide your actual Docker Hub username"
-            DOCKER_USERNAME=""
-            ;;
-          *)
-            print_info "Found saved Docker Hub username: $DOCKER_USERNAME"
-            ;;
-        esac
-      fi
-    fi
+    print_status "Using Docker Desktop session for user: $DOCKER_USERNAME"
+  fi
 
-    # Try to get username from Terraform config if still not found
-    if [ -z "$DOCKER_USERNAME" ] && [ -f "kit/se-parms.tfvars" ]; then
-      DOCKER_USERNAME=$(grep docker_username kit/se-parms.tfvars | cut -d'"' -f2 2>/dev/null || echo "")
+  # Prompt for username if still not found or was a placeholder
+  if [ -z "$DOCKER_USERNAME" ]; then
+    echo ""
+    read -p "Enter your Docker Hub username: " DOCKER_USERNAME
 
-      # Check if username looks like a placeholder
-      if [ -n "$DOCKER_USERNAME" ]; then
-        case "$DOCKER_USERNAME" in
-          username|dockerhubaccountid|your-username|your-dockerhub-username|DOCKERHUB_USERNAME)
-            print_info "Found placeholder username in kit/se-parms.tfvars: $DOCKER_USERNAME"
-            print_info "Please provide your actual Docker Hub username"
-            DOCKER_USERNAME=""
-            ;;
-          *)
-            print_info "Found Docker Hub username in kit/se-parms.tfvars: $DOCKER_USERNAME"
-            ;;
-        esac
-      fi
-    fi
-
-    # Prompt for username if still not found or was a placeholder
-    if [ -z "$DOCKER_USERNAME" ]; then
-      echo ""
+    # Validate that username is not empty
+    while [ -z "$DOCKER_USERNAME" ]; do
+      print_error "Username cannot be empty"
       read -p "Enter your Docker Hub username: " DOCKER_USERNAME
+    done
+  fi
 
-      # Validate that username is not empty
-      while [ -z "$DOCKER_USERNAME" ]; do
-        print_error "Username cannot be empty"
-        read -p "Enter your Docker Hub username: " DOCKER_USERNAME
-      done
-    fi
+  # Load cached password/PAT
+  if [ -f "$CONFIG_FILE" ]; then
+    DOCKER_LOGIN_PASSWORD=$(grep "DOCKER_PASSWORD=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+  fi
 
-    # Get Docker password/PAT (need it for both login and saving to config)
+  if [ -z "$DOCKER_LOGIN_PASSWORD" ] && [ -f "kit/se-parms.tfvars" ]; then
+    DOCKER_LOGIN_PASSWORD=$(grep docker_password kit/se-parms.tfvars | cut -d'"' -f2 2>/dev/null || echo "")
+  fi
+
+  if [ "$DOCKER_LOGIN_PASSWORD" = "logged-in-via-docker-desktop" ]; then
     DOCKER_LOGIN_PASSWORD=""
+  fi
 
-    # Try to get from config file first
-    if [ -f "$CONFIG_FILE" ]; then
-      DOCKER_LOGIN_PASSWORD=$(grep "DOCKER_PASSWORD=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
-    fi
+  NEED_DOCKER_LOGIN=false
 
-    # If not found or is a placeholder, prompt for it
-    if [ -z "$DOCKER_LOGIN_PASSWORD" ] || [ "$DOCKER_LOGIN_PASSWORD" = "logged-in-via-docker-desktop" ]; then
-      echo ""
-      print_info "You need to provide your Docker Hub password or Personal Access Token (PAT)"
-      print_info "To create a PAT: https://hub.docker.com/settings/security"
-      echo ""
+  # If we have cached credentials, ALWAYS use them to login
+  # This ensures we have a fresh auth token even if docker info shows a logged-in user
+  if [ -n "$DOCKER_LOGIN_PASSWORD" ]; then
+    print_status "Using cached Docker Hub credentials"
+    NEED_DOCKER_LOGIN=true
+  elif [ -n "$LOGGED_IN_USER" ] && [ "$LOGGED_IN_USER" = "$DOCKER_USERNAME" ]; then
+    # Only trust existing session if we don't have cached credentials
+    print_status "Using existing Docker Hub session for: $LOGGED_IN_USER"
+    print_info "Note: If push fails, you may need to re-authenticate"
+  else
+    echo ""
+    print_info "You need to provide your Docker Hub password or Personal Access Token (PAT)"
+    print_info "To create a PAT: https://hub.docker.com/settings/security"
+    echo ""
+    read -sp "Enter your Docker Hub password/PAT: " DOCKER_LOGIN_PASSWORD
+    echo ""
+
+    # Validate that password is not empty
+    while [ -z "$DOCKER_LOGIN_PASSWORD" ]; do
+      print_error "Password/PAT cannot be empty"
       read -sp "Enter your Docker Hub password/PAT: " DOCKER_LOGIN_PASSWORD
       echo ""
+    done
+    NEED_DOCKER_LOGIN=true
+  fi
 
-      # Validate that password is not empty
-      while [ -z "$DOCKER_LOGIN_PASSWORD" ]; do
-        print_error "Password/PAT cannot be empty"
-        read -sp "Enter your Docker Hub password/PAT: " DOCKER_LOGIN_PASSWORD
-        echo ""
-      done
+  if [ "$NEED_DOCKER_LOGIN" = true ]; then
+    echo ""
+    if [ -n "$LOGGED_IN_USER" ] && [ "$LOGGED_IN_USER" != "$DOCKER_USERNAME" ]; then
+      print_info "Logging in to Docker Hub as $DOCKER_USERNAME (overriding existing session)..."
     else
-      print_status "Using cached Docker Hub password/PAT"
+      print_info "Logging in to Docker Hub as $DOCKER_USERNAME..."
+    fi
+
+    if echo "$DOCKER_LOGIN_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin; then
+      print_status "Successfully logged in to Docker Hub"
+    else
+      print_error "Docker login failed. Please check your credentials and try again."
+      exit 1
     fi
 
     # Save credentials to config file for future runs (only if file doesn't exist yet)
@@ -289,17 +326,6 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
         echo "DOCKER_PASSWORD=$DOCKER_LOGIN_PASSWORD"
       } > "$CONFIG_FILE"
       print_info "Saved credentials to $CONFIG_FILE for future runs"
-    fi
-
-    # Login to Docker Hub using the password
-    echo ""
-    print_info "Logging in to Docker Hub..."
-
-    if echo "$DOCKER_LOGIN_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin; then
-      print_status "Successfully logged in to Docker Hub"
-    else
-      print_error "Docker login failed. Please check your credentials and try again."
-      exit 1
     fi
   fi
 
@@ -319,7 +345,19 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
   if docker push "$DOCKER_USERNAME/harness-demo:backend-latest" --quiet; then
     print_status "Backend image pushed to Docker Hub"
   else
-    print_error "Docker push failed. Check that you have access to docker.io/$DOCKER_USERNAME/harness-demo"
+    print_error "Docker push failed"
+    echo ""
+    echo "Common causes:"
+    echo "  1. Repository doesn't exist - Create 'harness-demo' at https://hub.docker.com/repository/create"
+    echo "  2. Authentication failed - Your credentials may be invalid"
+    echo "  3. No push access - Check repository permissions"
+    echo ""
+    echo "To fix:"
+    echo "  • Go to https://hub.docker.com/repository/create"
+    echo "  • Create a repository named: harness-demo"
+    echo "  • Make it public or private (your choice)"
+    echo "  • Then re-run: ./start-demo.sh"
+    echo ""
     cd ..
     exit 1
   fi

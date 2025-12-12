@@ -14,7 +14,11 @@ This lab demonstrates Harness Code Repository's secret scanning feature, which p
 
 1. Log in to your Harness account at [app.harness.io](https://app.harness.io)
 2. Select the **"Base Demo"** project
+   ![](../images/2025-12-12_12-20-02.jpg)
+
 3. Click on **Code Repository** module in the left navigation
+
+   ![](../images/2025-12-12_12-16-19.jpg)
 
 ## Step 2: Generate Clone Credentials
 
@@ -31,6 +35,21 @@ The `partner_demo_kit` repository was created by Terraform. You need credentials
 > - **macOS**: `brew install --cask git-credential-manager`
 > - **Windows**: Download from GitHub releases
 > - **Linux**: Follow instructions on the GCM GitHub page
+>
+> **If you already have credentials saved** and need to update them:
+>
+> **View stored credentials:**
+> - **macOS**: Open "Keychain Access" app → search for "git.harness.io" → view/delete entries
+> - **Windows**: Search for "Credential Manager" → Windows Credentials → find the Harness entry
+> - **Linux**: `secret-tool search service git`
+>
+> **Erase stored credentials:**
+> - **macOS/Linux**:
+>   ```bash
+>   printf "protocol=https\nhost=git.harness.io\n" | git-credential-manager erase
+>   ```
+> - **Windows**: In Credential Manager → Remove the Harness entry
+> - **After erasing**: Re-clone or push to enter new credentials
 
 ## Step 3: Clone the Harness Code Repository
 

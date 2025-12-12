@@ -28,13 +28,13 @@ This guide helps you get started with the Harness Partner Demo Kit. Before proce
 Before starting the labs, ensure you have completed:
 
 1. **Harness Account Setup**
-   - Harness account with CI, CD, and Code Repository modules enabled
+   - Free Harness account with CI, CD, and Code Repository
    - Harness delegate installed at account level (Helm-based recommended)
 
 2. **Local Environment Setup**
-   - Docker Desktop or Docker Engine running
+   - Docker Engine running
    - Kubernetes cluster: Rancher Desktop (recommended) or minikube
-   - Terraform installed
+   - Terraform or Open Tofu installed
    - kubectl and helm installed
    - Git client installed
 
@@ -112,7 +112,7 @@ kubectl get pods -n monitoring
 # Should see prometheus-k8s-0 pod running
 ```
 
-### 4. Docker Hub Access
+### 4. Docker Hub Access - NOT SURE WE NEED TO CHECK THIS?
 
 ```bash
 # Test Docker login
