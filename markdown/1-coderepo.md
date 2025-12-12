@@ -27,6 +27,7 @@ The `partner_demo_kit` repository was created by Terraform. You need credentials
 1. Click on the **"partner_demo_kit"** repository
 2. Click **"Clone"** button in the top right
 3. Click **"+Generate Clone Credential"**
+   ![](../images/2025-12-12_12-57-58.jpg)
 4. **Save the generated username and token** - you'll need these in the next step
 
 > **Tip**: Consider using [Git Credential Manager](https://github.com/git-ecosystem/git-credential-manager) to securely store and manage your Git credentials. It provides a better experience than manually entering credentials each time.
@@ -84,51 +85,25 @@ cd partner_demo_kit
 Now let's intentionally try to commit a secret to demonstrate the blocking feature:
 
 1. **Edit the file** `backend/entrypoint.sh`
+   ![](../images/2025-12-12_13-04-51.jpg)
+
 2. **Add this line** anywhere in the file:
    ```bash
    TOKEN="02290a2a-7f5a-4836-8745-d4d797e475d0"
    ```
+   ![](../images/2025-12-12_13-04-27.jpg)
 
-3. **Stage, commit, and push your changes**:
-   ```bash
-   # Stage the modified file
-   git add backend/entrypoint.sh
-
-   # Create a commit with your changes
-   git commit -m "test secret scanning"
-
-   # Push to the remote repository
-   git push origin main
-   ```
-
-> **Understanding Git Commands**:
-> - `git add` - Stages files for commit (adds them to the "staging area")
-> - `git commit` - Creates a snapshot of your staged changes with a message
-> - `git push` - Uploads your local commits to the remote repository
->
-> These three commands form the core Git workflow for sharing code changes.
-
+3. **Commit your Changes**:
+   - Click `Commit changes` button 
+   
 ## Expected Result
 
 The push should be **BLOCKED** with an error message similar to:
 
 ```
-remote:
-remote: ===================================================================
-remote: Secret Scanning: BLOCKED
-remote: ===================================================================
-remote: A secret has been detected in your commit.
-remote:
-remote: File: backend/entrypoint.sh
-remote: Secret Type: Generic High Entropy Secret
-remote:
-remote: Please remove the secret and try again.
-remote: ===================================================================
-! [remote rejected] main -> main (pre-receive hook declined)
-error: failed to push some refs to '<repo-url>'
+pre-receive hook blocked reference update: "Found 1 secret(s) in your code. Push rejected."
 ```
-
-The output will indicate that a **Generic High Entropy Secret** was detected.
+![](../images/2025-12-12_13-11-07.jpg)
 
 > **This is Proactive Security in Action!**
 > The secret was blocked BEFORE it entered the repository, preventing it from ever appearing in the Git history.
