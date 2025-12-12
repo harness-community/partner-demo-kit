@@ -1,56 +1,112 @@
-# Demo Documentation
+# Harness Partner Demo Kit
 
-This directory contains the workshop documentation rendered with [Docsify](https://docsify.js.org/).
+> A comprehensive hands-on demonstration of Harness platform capabilities running entirely on local infrastructure.
 
-## Quick Start (Local Preview)
+## 🚀 Welcome
 
-```bash
-# Install docsify-cli
-npm i -g docsify-cli
+This demo kit showcases the complete Harness platform including CI/CD, Code Repository, Continuous Verification, and Security Testing. Everything runs on your local Kubernetes cluster (minikube or Rancher Desktop) to minimize external dependencies.
 
-# Serve locally
-cd markdown
-docsify serve .
+**All resources are created in a "Base Demo" project**, keeping demo resources segregated from production environments.
 
-# Access at http://localhost:3000
-```
+---
 
-## Deploy to Kubernetes
+## 📚 Lab Modules
 
-### 1. Build the Docker image
+<div class="lab-card">
 
-```bash
-cd markdown
-docker build -t <your-dockerhub-username>/harness-demo:docs-latest .
-docker push <your-dockerhub-username>/harness-demo:docs-latest
-```
+### <span class="lab-number">Lab 0</span> [Getting Started & Setup](0-login.md)
 
-### 2. Update the K8s manifest
+Set up your local environment, verify prerequisites, and ensure all infrastructure components are ready.
 
-Edit `harness-deploy/docs/docs-deployment.yaml` and replace `dockerhubaccountid` with your Docker Hub username.
+**Topics:** Infrastructure setup, Harness account configuration, Kubernetes cluster verification
 
-### 3. Deploy to K8s
+</div>
 
-```bash
-kubectl apply -f harness-deploy/docs/docs-deployment.yaml
-```
+<div class="lab-card">
 
-### 4. Access the docs
+### <span class="lab-number">Lab 1</span> [Code Repository Secret Scanning](1-coderepo.md)
 
-- **Minikube**: `minikube service docs-service` or `http://localhost:30001` (with minikube tunnel running)
-- **Rancher Desktop**: `http://localhost:30001`
+Discover how Harness Code Repository prevents secrets from being committed to your codebase.
 
-## Documentation Structure
+**Topics:** Secret scanning, Git credential management, proactive security
 
-- **0-login.md** - Initial setup and login
-- **1-coderepo.md** - Code Repository secret scanning
-- **2-build.md** - CI pipeline setup
-- **3-cd-frontend.md** - Frontend deployment
-- **4-cd-backend.md** - Backend canary deployment
-- **5-cv.md** - Continuous verification
-- **6-sto.md** - Security scanning
-- **7-opa.md** - OPA policy enforcement
+</div>
 
-## Customization
+<div class="lab-card">
 
-Edit `index.html` to customize Docsify configuration, themes, and plugins.
+### <span class="lab-number">Lab 2</span> [CI Pipeline Setup](2-build.md)
+
+Build and test your application using Harness CI with Test Intelligence and containerization.
+
+**Topics:** Build pipelines, test intelligence, Docker image creation
+
+</div>
+
+<div class="lab-card">
+
+### <span class="lab-number">Lab 3</span> [Frontend Deployment](3-cd-frontend.md)
+
+Deploy the Angular frontend application using a rolling deployment strategy.
+
+**Topics:** Kubernetes deployments, rolling updates, service configuration
+
+</div>
+
+<div class="lab-card">
+
+### <span class="lab-number">Lab 4</span> [Backend Canary Deployment](4-cd-backend.md)
+
+Implement a canary deployment strategy for the Django backend with progressive rollout.
+
+**Topics:** Canary deployments, traffic splitting, progressive delivery
+
+</div>
+
+<div class="lab-card">
+
+### <span class="lab-number">Lab 5</span> [Continuous Verification](6-cv.md)
+
+Use Prometheus metrics to automatically verify deployment health and rollback on issues.
+
+**Topics:** Health verification, Prometheus integration, automated rollback
+
+</div>
+
+<div class="lab-card">
+
+### <span class="lab-number">Lab 6</span> [Security Scanning](5-security.md)
+
+Integrate security scanning into your pipeline to detect vulnerabilities early.
+
+**Topics:** Security testing, vulnerability detection, compliance *(requires licensed partner org)*
+
+</div>
+
+<div class="lab-card">
+
+### <span class="lab-number">Lab 7</span> [OPA Policy Enforcement](7-opa.md)
+
+Enforce governance policies across your deployments using Open Policy Agent.
+
+**Topics:** Policy as code, governance, compliance automation *(requires licensed partner org)*
+
+</div>
+
+---
+
+## 🛠️ Tech Stack
+
+- **Frontend:** Angular 17, TypeScript, Harness Feature Flags SDK
+- **Backend:** Django 5.0, Python, PostgreSQL
+- **Infrastructure:** Kubernetes (minikube/Rancher Desktop), Prometheus
+- **IaC:** Terraform for Harness resource provisioning
+
+## 📖 Quick Links
+
+- [Harness Documentation](https://developer.harness.io)
+- [GitHub Repository](https://github.com/harness-community/partner-demo-kit)
+- [Support & Issues](https://github.com/harness-community/partner-demo-kit/issues)
+
+---
+
+**Ready to start?** Begin with [Lab 0: Getting Started](0-login.md)
