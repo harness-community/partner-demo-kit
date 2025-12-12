@@ -129,13 +129,9 @@ Traditional secret detection tools scan after commits are made. Harness Code blo
 
 Remove the test secret from your local file:
 
-```bash
-# Discard changes to the file (restore to last committed version)
-git checkout backend/entrypoint.sh
-
-# Verify the file is clean
-git status
-```
+- Hover over the red box at the top of the page and click the red `X` to close
+- Click `Cancel` to close the Commit dialog.
+- Click `Cancel` again to discard our file changes.
 
 > **Note**: Since the push was blocked, the secret never entered the repository. You only need to clean up your local working directory.
 
