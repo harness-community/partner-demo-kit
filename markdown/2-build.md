@@ -12,11 +12,15 @@ This lab walks through creating a complete CI pipeline with test intelligence, c
 
 ## Step 1: Create a New Pipeline
 
-1. In Harness UI, navigate to **Pipelines** in the "Base Demo" project
-2. Click **+ Create Pipeline**
+1. In Harness UI, use the modular selector button to navigate to CD module
+   ![](../images/2025-12-12_13-21-40.jpg)
+2. Close the wizard if displayed
+   ![](../images/2025-12-12_13-23-44.jpg)
+3. Click **Pipelines** in the "Base Demo" project (close the wizard if displayed)
+4. Click **+ Create Pipeline**
    - **Name**: `Workshop Build and Deploy`
    - **Store**: Inline (for simplicity)
-3. Click **Create**
+5. Click **Create**
 
 > **Note**: Inline vs. Remote - We're using inline for this lab, but you can store pipelines in Git repositories alongside your application code.
 
