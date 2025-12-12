@@ -247,6 +247,23 @@ else
   print_info "Backend service not found (already deleted)"
 fi
 
+# Delete documentation deployment and service
+if kubectl get deployment docs-deployment &> /dev/null; then
+  print_info "Deleting documentation deployment..."
+  kubectl delete deployment docs-deployment --ignore-not-found=true
+  print_status "Documentation deployment deleted"
+else
+  print_info "Documentation deployment not found (already deleted)"
+fi
+
+if kubectl get service docs-service &> /dev/null; then
+  print_info "Deleting documentation service..."
+  kubectl delete service docs-service --ignore-not-found=true
+  print_status "Documentation service deleted"
+else
+  print_info "Documentation service not found (already deleted)"
+fi
+
 # Delete any remaining pods
 print_info "Checking for remaining application pods..."
 REMAINING_PODS=$(kubectl get pods --no-headers 2>/dev/null | grep -E "frontend|backend" | wc -l)

@@ -362,6 +362,32 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
     exit 1
   fi
   cd ..
+
+  # Build documentation image
+  print_info "Building documentation Docker image..."
+
+  # Copy images into markdown directory for Docker build context
+  if [ -d "images" ]; then
+    cp -r images markdown/ 2>/dev/null || true
+  fi
+
+  cd markdown
+  if docker build -t "$DOCKER_USERNAME/harness-demo:docs-latest" . --quiet; then
+    print_status "Documentation image built: $DOCKER_USERNAME/harness-demo:docs-latest"
+  else
+    print_error "Documentation Docker build failed"
+    cd ..
+    exit 1
+  fi
+
+  # Push documentation image
+  print_info "Pushing documentation image to Docker Hub..."
+  if docker push "$DOCKER_USERNAME/harness-demo:docs-latest" --quiet; then
+    print_status "Documentation image pushed to Docker Hub"
+  else
+    print_error "Documentation push failed (this is not critical, continuing...)"
+  fi
+  cd ..
 else
   print_info "Skipping Docker image build (--skip-docker-build flag used)"
 fi
@@ -629,6 +655,28 @@ if [ "$K8S_TYPE" = "minikube" ]; then
   print_info "to access services at localhost:8080"
 fi
 
+# Deploy documentation to Kubernetes
+if [ "$SKIP_DOCKER_BUILD" = false ]; then
+  print_section "Deploying Documentation"
+
+  # Update docs deployment with Docker Hub username
+  print_info "Configuring documentation deployment..."
+  sed -i.bak "s/dockerhubaccountid/$DOCKER_USERNAME/g" harness-deploy/docs/docs-deployment.yaml
+  rm harness-deploy/docs/docs-deployment.yaml.bak 2>/dev/null
+
+  # Deploy docs to K8s
+  print_info "Deploying documentation to Kubernetes..."
+  if kubectl apply -f harness-deploy/docs/docs-deployment.yaml > /dev/null 2>&1; then
+    print_status "Documentation deployed successfully"
+    echo ""
+    echo "📚 Documentation available at:"
+    echo "   http://localhost:30001"
+    echo ""
+  else
+    print_error "Documentation deployment failed (non-critical)"
+  fi
+fi
+
 # Display next steps
 print_section "Next Steps"
 echo ""
@@ -643,15 +691,18 @@ elif [ -f "kit/terraform.tfstate" ] && [ -s "kit/terraform.tfstate" ]; then
   echo "✅ Harness resources are configured and ready!"
   echo ""
   echo "Next steps:"
-  echo "  1. Navigate to Harness UI: https://app.harness.io"
-  echo "  2. Select the 'Base Demo' project"
-  echo "  3. Configure Harness Code Repository:"
+  echo "  1. Open the documentation in your browser:"
+  echo "     http://localhost:30001"
+  echo ""
+  echo "  2. Navigate to Harness UI: https://app.harness.io"
+  echo "  3. Select the 'Base Demo' project"
+  echo "  4. Configure Harness Code Repository:"
   echo "     - Go to Code Repository module"
   echo "     - Click 'partner_demo_kit' repository"
   echo "     - Click 'Clone' > '+Generate Clone Credential'"
   echo "     - Save the username and token"
   echo "     - Enable Secret Scanning: Manage Repository > Security"
-  echo "  4. Follow the lab guides in the markdown/ directory"
+  echo "  5. Follow the lab guides at http://localhost:30001"
   echo ""
 else
   echo "Note: Harness resources were not configured (terraform.tfstate not found)"
