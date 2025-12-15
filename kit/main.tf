@@ -60,7 +60,7 @@ resource "harness_platform_connector_kubernetes" "workshop_k8s" {
   description        = "Connector to local K8s cluster (minikube)"
 
   inherit_from_delegate {
-    delegate_selectors = ["helm-delegate"]
+    delegate_selectors = ["local-k8s-delegate"]
   }
 
   depends_on = [
@@ -174,7 +174,7 @@ resource "harness_platform_connector_prometheus" "prometheus" {
   project_id         = harness_platform_project.base_demo.identifier
   description        = "Connector to Prometheus instance (use ngrok URL or cluster-local URL)"
   url                = "http://prometheus-k8s.monitoring.svc.cluster.local:9090/"
-  delegate_selectors = ["helm-delegate"]
+  delegate_selectors = ["local-k8s-delegate"]
 
   depends_on = [
     harness_platform_project.base_demo

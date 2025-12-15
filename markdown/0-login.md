@@ -21,159 +21,280 @@ This is the **Base Partner Demo Kit** - one of two comprehensive demo kits avail
 > **Note**: The advanced features (Labs 5 and 7) require a licensed partner organization. This base kit can be completed with a free Harness account.
 
 ## Overview
-This guide helps you get started with the Harness Partner Demo Kit. Before proceeding with the individual labs, ensure you have completed all setup steps and can access your Harness account.
+
+This guide helps you get started with the Harness Partner Demo Kit. The setup process is automated through a script that handles all infrastructure and Harness resource provisioning. You'll then install a Harness delegate before proceeding with the individual labs.
 
 ## Prerequisites
 
-Before starting the labs, ensure you have completed:
+Before starting, ensure you have:
 
-1. **Harness Account Setup**
-   - Free Harness account with CI, CD, and Code Repository
-   - Harness delegate installed at account level (Helm-based recommended)
+1. **Harness Account**
+   - Free (or paid) Harness account with CI, CD, and Code Repository modules
+   - Harness Account ID (found in your account profile URL)
+   - Harness Personal Access Token (PAT) with appropriate permissions
 
-2. **Local Environment Setup**
+2. **Local Environment**
    - Docker Engine running
    - Kubernetes cluster: Rancher Desktop (recommended) or minikube
-   - Terraform or Open Tofu installed
+   - Terraform installed
    - kubectl and helm installed
    - Git client installed
 
 3. **Docker Hub Account**
    - Docker Hub account created
-   - Repository `harness-demo` created in Docker Hub
+   - Docker Hub repository `harness-demo` created
    - Docker Hub Personal Access Token (PAT) generated
 
-4. **Terraform Provisioning Completed**
-   - Ran `terraform apply` from the `kit/` directory
-   - Verified "Base Demo" project was created in Harness
-   - Verified `partner_demo_kit` Code Repository was created
+## Run the Automated Setup
+
+The demo includes an automated setup script that handles all infrastructure and resource provisioning:
+
+**1. Make the script executable (first time only):**
+```bash
+chmod +x start-demo.sh
+```
+
+**2. Run the setup script:**
+```bash
+./start-demo.sh
+```
+
+The script will prompt you for:
+- Harness Account ID
+- Harness Personal Access Token (PAT)
+- Docker Hub username and password
+
+> **Tip**: The script saves your configuration to `.demo-config` for future runs, so you won't need to re-enter credentials.
+
+**3. Wait for completion:**
+The script takes 3-5 minutes to complete. Watch for the success message indicating all resources were created.
+
+## What the Setup Script Did
+
+The automated setup configured your complete demo environment:
+
+1. **Detected and Started Kubernetes** - Identified your cluster (minikube or Rancher Desktop) and ensured it's running
+2. **Deployed Prometheus** - Installed Prometheus in the `monitoring` namespace for continuous verification
+3. **Built and Pushed Docker Image** - Created the backend application Docker image and pushed it to your Docker Hub
+4. **Provisioned Harness Resources** - Used Terraform to create the "Base Demo" project with all connectors, environments, services, pipelines, and monitored services
+5. **Saved Your Configuration** - Stored credentials in `.demo-config` for subsequent runs
 
 ## Access Your Harness Account
 
+Now that setup is complete, access your Harness account to verify resources:
+
 1. Navigate to [app.harness.io](https://app.harness.io)
 2. Log in with your Harness credentials
-3. **Select the "Base Demo" project** from the project picker
+3. **Select the "Base Demo" project** from the project picker in the top navigation
 
 > **Important**: All lab activities take place in the **"Base Demo"** project. This keeps demo resources separate from production environments.
 
 ## Verify Your Setup
 
-Before proceeding to Lab 1, verify:
+Before installing the delegate, verify that Terraform created all required resources:
 
-### 1. Harness Resources Created by Terraform
+### Harness Resources in "Base Demo" Project
 
 Navigate to the **"Base Demo"** project and verify:
 
 **Code Repository:**
-- Repository: `partner_demo_kit` exists
+- Go to **Code Repository** module
+- Verify `partner_demo_kit` repository exists
 
 **Connectors:**
-- `workshop-docker` - Docker Hub connector
-- `workshop_k8s` - Kubernetes connector (for local cluster)
-- Prometheus connector (for continuous verification)
+- Go to **Project Setup** > **Connectors**
+- Verify these connectors exist:
+  - `workshop-docker` - Docker Hub connector
+  - `workshop_k8s` - Kubernetes connector (for local cluster)
+  - Prometheus connector (for continuous verification)
 
 **Environments:**
-- `Dev` environment created
-- `K8s Dev` infrastructure definition created
+- Go to **Environments**
+- Verify `Dev` environment exists
+- Click into Dev environment and verify `K8s Dev` infrastructure definition exists
 
 **Services:**
-- `backend` service pre-configured with K8s manifests
+- Go to **Services**
+- Verify `backend` service exists and is configured with K8s manifests
 
 **Templates:**
-- `Compile Application` step template created
+- Go to **Templates** (under Project Setup)
+- Verify `Compile Application` step template exists
 
 **Monitored Services:**
-- `backend_dev` monitored service for continuous verification
+- Go to **Service Reliability** > **Monitored Services**
+- Verify `backend_dev` monitored service exists for continuous verification
 
-### 2. Local Kubernetes Cluster Running
+### Local Infrastructure
 
-**With Rancher Desktop:**
+Verify your local infrastructure is running:
+
+**Kubernetes Cluster:**
 ```bash
-# Check cluster status
 kubectl cluster-info
-
-# Should see Kubernetes control plane running
+# Should show Kubernetes control plane running
 ```
 
-**With minikube:**
+**Prometheus:**
 ```bash
-# Check cluster status
-minikube status
-
-# Should show: host, kubelet, and apiserver running
+kubectl get pods -n monitoring
+# Should see prometheus-k8s-0 pod running
 ```
 
-### 3. Prometheus Deployed
+## Install Harness Delegate
+
+The Harness Delegate is required to execute pipelines and connect to your local Kubernetes cluster. Install it at the **project level** using Helm:
+
+### 1. Navigate to Delegate Installation
+
+1. In the Harness UI, make sure your **Base Demo** project is selected in the scope box.
+2. Select **Project Settings** on the left menu
+3. Click **Delegates**
+   ![](/markdown/images/2025-12-15_15-47-36.jpg)
+
+4. Click **Install a Delegate** (or **New Delegate** if you have existing delegates)
+
+### 2. Configure Delegate Settings
+
+> **Important**: Copy the exact command from the Harness UI as it includes your account-specific details.
+
+1. **Select delegate type**: Choose **Kubernetes**
+2. **Select installation method**: Choose **Helm Chart**
+3. **Name your delegate**: Enter a meaningful name (e.g., `local-k8s-delegate`)
+4. **Copy and paste**: the 2 lines to add the chart repo to the local helm registry in your terminal.
+5. **Copy and paste**: directions in your local terminal (where your k8s cluster is running) to install the delegate
+6. After a minute or so, click **Verify**
+
+![](/markdown/images/2025-12-15_15-55-59.jpg)
+
+7. Click **Done** once verified.
+
+### 3. Verify Delegate Installation
+
+**Check delegate pod status:**
+```bash
+kubectl get pods -n harness-delegate-ng
+
+# Wait for pod to show STATUS: Running (may take 1-2 minutes)
+```
+
+**Verify delegate is connected in Harness UI:**
+1. Stay on the Delegates page in Harness
+2. Wait for your delegate to appear in the delegates list (refresh if needed)
+3. Status should show **Connected** with a green indicator
+
+> **Note**: If the delegate doesn't connect within 2-3 minutes, check the pod logs: `kubectl logs -n harness-delegate-ng <pod-name>`
+
+### 5. Verify Delegate Functionality
+
+Test that the delegate can access your local Kubernetes cluster:
+
+1. Go to **Project Setup** > **Connectors** in the "Base Demo" project
+2. Click on the `workshop_k8s` connector
+3. Click **Test Connection** (top right)
+4. The test should succeed, confirming the delegate can communicate with your local cluster
+
+## Troubleshooting
+
+### Setup Script Failed
+
+**If start-demo.sh fails during execution:**
+1. Check the error message for specific issues
+2. Verify all prerequisites are installed:
+   ```bash
+   docker --version
+   kubectl version --client
+   terraform --version
+   helm version
+   ```
+3. Ensure Docker Engine is running
+4. Verify Kubernetes cluster is accessible: `kubectl cluster-info`
+5. Re-run the script after fixing issues: `./start-demo.sh`
+
+### Can't Find "Base Demo" Project
+
+1. Check if Terraform completed successfully in the script output
+2. Verify the project exists: Harness UI > **Projects** > Look for "Base Demo"
+3. If missing, re-run setup: `./start-demo.sh`
+
+### Delegate Not Connecting
+
+**Check delegate pod status:**
+```bash
+kubectl get pods -n harness-delegate-ng
+kubectl logs -n harness-delegate-ng <pod-name>
+```
+
+**Common issues:**
+- Pod is not running: Check for image pull errors or resource constraints
+- Delegate shows in UI but status is "Not Connected": Check network connectivity
+- Delegate token expired: Generate a new token and reinstall
+
+### Kubernetes Cluster Issues
+
+**Rancher Desktop:**
+- Verify Rancher Desktop is running
+- Check Kubernetes is enabled in **Preferences** > **Kubernetes**
+- Restart Rancher Desktop if needed
+
+**Minikube:**
+- Start cluster: `minikube start`
+- Check status: `minikube status`
+- If tunnel needed: Run `minikube tunnel` in a separate terminal
+
+### Prometheus Not Running
 
 ```bash
 # Check Prometheus pod
 kubectl get pods -n monitoring
 
-# Should see prometheus-k8s-0 pod running
-```
-
-### 4. Docker Hub Access - NOT SURE WE NEED TO CHECK THIS?
-
-```bash
-# Test Docker login
-docker login
-
-# Verify you can push to your repository
-docker pull hello-world
-docker tag hello-world dockerhubaccountid/harness-demo:test
-docker push dockerhubaccountid/harness-demo:test
-```
-
-Replace `dockerhubaccountid` with your actual Docker Hub username.
-
-## Troubleshooting
-
-### Can't Find "Base Demo" Project
-- Verify Terraform completed successfully
-- Check Harness UI > Projects to see if project exists
-- Re-run `terraform apply` if needed
-
-### Kubernetes Cluster Not Accessible
-**Rancher Desktop:**
-- Check Rancher Desktop is running
-- Verify Kubernetes is enabled in Settings
-
-**Minikube:**
-- Run `minikube start` to start the cluster
-- Run `minikube status` to verify
-
-### Prometheus Not Running
-```bash
-# Reinstall Prometheus
-cd kit
+# If not running, redeploy
 kubectl create namespace monitoring
-kubectl -n monitoring apply -f ./prometheus.yml
+kubectl -n monitoring apply -f ./kit/prometheus.yml
 ```
 
-### Docker Push Fails
-- Verify Docker Hub credentials in `kit/se-parms.tfvars`
-- Check Docker Hub repository `harness-demo` exists
-- Verify you're logged into Docker Hub: `docker login`
+### Connector Test Failures
+
+**workshop_k8s connector fails:**
+- Verify delegate is connected
+- Check delegate has access to your local cluster
+- Test manually: `kubectl get nodes`
+
+**workshop-docker connector fails:**
+- Verify Docker Hub credentials in Harness secrets
+- Test manually: `docker login`
+- Ensure Docker Hub repository `harness-demo` exists
 
 ## Lab Structure
 
-The demo consists of these labs:
+Now that you've completed the setup and installed the delegate, you're ready to proceed with the demo labs:
 
-1. **Lab 1: Code Repository Secret Scanning** - Prevent secrets from being committed
-2. **Lab 2: CI Pipeline** - Build with test intelligence and Docker push
-3. **Lab 3: Frontend Deployment** - Rolling deployment to Kubernetes
-4. **Lab 4: Backend Deployment** - Canary deployment strategy
-5. **Lab 5: Security Testing** - (Requires licensed partner org)
-6. **Lab 6: Continuous Verification** - ML-powered deployment validation
-7. **Lab 7: OPA Policy Enforcement** - (Requires licensed partner org)
+1. **Lab 1: Code Repository Secret Scanning** - Prevent secrets from being committed to your code repository
+2. **Lab 2: CI Pipeline** - Build application with test intelligence and push Docker images
+3. **Lab 3: Frontend Deployment** - Deploy frontend using rolling deployment strategy
+4. **Lab 4: Backend Deployment** - Deploy backend using canary deployment strategy
+5. **Lab 5: Security Testing** - Advanced security scanning (requires licensed partner org)
+6. **Lab 6: Continuous Verification** - ML-powered deployment validation with Prometheus
+7. **Lab 7: OPA Policy Enforcement** - Policy-as-code governance (requires licensed partner org)
+
+> **Note**: Labs 5 and 7 require a licensed Harness organization. The core demo (Labs 1-4, 6) can be completed with a free Harness account.
 
 ## Important Notes
 
-- All demo activities use the **"Base Demo"** project
-- The `partner_demo_kit` repository in Harness Code is a mirror of the GitHub repository
-- You'll need to generate Git credentials for the Harness Code Repository (covered in Lab 1)
-- Keep a terminal with `minikube tunnel` running throughout the demo (if using minikube)
+**Before Starting Lab 1:**
+- Ensure your delegate shows **Connected** status in Harness
+- Verify all connectors in the "Base Demo" project test successfully
+- If using minikube, keep `minikube tunnel` running in a separate terminal throughout the demo
 - Rancher Desktop users don't need a tunnel - services are automatically accessible
+
+**Throughout the Demo:**
+- All activities take place in the **"Base Demo"** project
+- The `partner_demo_kit` repository in Harness Code Repository is mirrored from GitHub
+- You'll generate Git credentials for the Harness Code Repository in Lab 1
+- Your local Kubernetes cluster and Prometheus must remain running
+
+**Next Steps:**
+Proceed to **Lab 1: Code Repository Secret Scanning** to begin the demo!
 
 ---
 

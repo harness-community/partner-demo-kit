@@ -88,6 +88,4 @@ Remove the test secret from your local file:
 - Click `Cancel` to close the Commit dialog.
 - Click `Cancel` again to discard our file changes.
 
-> **Note**: Since the push was blocked, the secret never entered the repository. You only need to clean up your local working directory.
-
 ---

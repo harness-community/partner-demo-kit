@@ -28,10 +28,12 @@ This lab walks through creating a complete CI pipeline with test intelligence, c
 
 1. Click **+ Add Stage**
 2. Select **Build** as the stage type
+   ![](/markdown/images/2025-12-15_15-14-23.jpg)
 3. Configure the build stage:
    - **Stage Name**: `Build`
    - **Clone Codebase**: Enable
    - **Repository Name**: `partner_demo_kit` (the Harness Code repository created by Terraform)
+   ![](/markdown/images/2025-12-15_15-12-17.jpg)
 4. Click **Set Up Stage**
 
 ## Step 3: Configure Build Infrastructure
@@ -40,7 +42,7 @@ You have several options for build infrastructure. Choose the one that best fits
 
 ### Option A: Harness Cloud (Recommended)
 
-> **Important**: Harness Cloud is available for verified Harness accounts. If you're using a new or free-tier account, you may need to use Option B (Kubernetes) instead.
+> **Important**: Harness Cloud is available for paid Harness accounts. If you're using a new or free-tier account, you will need to use Option B (Kubernetes) instead.
 
 1. On the **Infrastructure** tab
 2. Select **Harness Cloud**
