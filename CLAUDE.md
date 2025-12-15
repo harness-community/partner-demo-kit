@@ -94,13 +94,16 @@ chmod +x start-demo.sh stop-demo.sh
 **What start-demo.sh automates:**
 1. Checks prerequisites (Docker, kubectl, Terraform)
 2. Detects and starts Kubernetes (minikube/Rancher Desktop)
-3. Deploys Prometheus for continuous verification
-4. Authenticates to Docker Hub (smart detection of existing login)
-5. Builds and pushes backend Docker image
-6. **Collects Harness credentials** (Account ID, PAT, Docker password)
-7. **Updates kit/se-parms.tfvars** automatically
-8. **Runs Terraform** (init, plan, apply) to create all Harness resources
-9. Saves configuration to `.demo-config` for subsequent runs
+3. **Creates Docker Hub secret** (`dockerhub-pull`) in Kubernetes for pulling Harness CI images
+4. Deploys Prometheus for continuous verification
+5. Authenticates to Docker Hub (smart detection of existing login)
+6. Builds and pushes backend and documentation Docker images
+7. **Updates Docker Hub secret** with authenticated credentials after login
+8. **Collects Harness credentials** (Account ID, PAT, Docker password)
+9. **Updates kit/se-parms.tfvars** automatically
+10. **Runs Terraform** (init, plan, apply) to create all Harness resources
+11. Saves configuration to `.demo-config` for subsequent runs
+12. Deploys documentation to Kubernetes at http://localhost:30001
 
 **stop-demo.sh** - Cleanup script:
 ```bash

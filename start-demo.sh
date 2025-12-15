@@ -143,6 +143,69 @@ else
   exit 1
 fi
 
+# Create Docker Hub secret for pulling images
+print_section "Creating Docker Hub Secret for Image Pulls"
+
+# This secret allows Kubernetes to pull Harness CI addon images (harness/ci-addon, etc.)
+# Harness CI looks for a secret named 'dockerhub-pull'
+
+# Load Docker credentials from config file
+CONFIG_FILE=".demo-config"
+if [ -f "$CONFIG_FILE" ]; then
+  DOCKER_USERNAME=$(grep "DOCKER_USERNAME=" "$CONFIG_FILE" | cut -d'=' -f2)
+  DOCKER_PASSWORD=$(grep "DOCKER_PASSWORD=" "$CONFIG_FILE" | cut -d'=' -f2)
+fi
+
+# Check if we have credentials
+if [ -n "$DOCKER_USERNAME" ] && [ -n "$DOCKER_PASSWORD" ] && [ "$DOCKER_PASSWORD" != "logged-in-via-docker-desktop" ]; then
+  print_info "Creating Docker Hub pull secret with saved credentials..."
+
+  # Create secret in default namespace
+  if kubectl get secret dockerhub-pull -n default &> /dev/null; then
+    print_info "Updating existing Docker Hub secret in default namespace..."
+    kubectl delete secret dockerhub-pull -n default &> /dev/null
+  fi
+
+  kubectl create secret docker-registry dockerhub-pull \
+    --docker-server=https://index.docker.io/v1/ \
+    --docker-username="$DOCKER_USERNAME" \
+    --docker-password="$DOCKER_PASSWORD" \
+    --docker-email="${DOCKER_USERNAME}@example.com" \
+    -n default &> /dev/null
+
+  if [ $? -eq 0 ]; then
+    print_status "Docker Hub secret created in default namespace"
+  else
+    print_error "Failed to create Docker Hub secret in default namespace"
+  fi
+
+  # Create secret in harness-delegate-ng namespace (if it exists)
+  if kubectl get namespace harness-delegate-ng &> /dev/null; then
+    if kubectl get secret dockerhub-pull -n harness-delegate-ng &> /dev/null; then
+      print_info "Updating existing Docker Hub secret in harness-delegate-ng namespace..."
+      kubectl delete secret dockerhub-pull -n harness-delegate-ng &> /dev/null
+    fi
+
+    kubectl create secret docker-registry dockerhub-pull \
+      --docker-server=https://index.docker.io/v1/ \
+      --docker-username="$DOCKER_USERNAME" \
+      --docker-password="$DOCKER_PASSWORD" \
+      --docker-email="${DOCKER_USERNAME}@example.com" \
+      -n harness-delegate-ng &> /dev/null
+
+    if [ $? -eq 0 ]; then
+      print_status "Docker Hub secret created in harness-delegate-ng namespace"
+    else
+      print_error "Failed to create Docker Hub secret in harness-delegate-ng namespace"
+    fi
+  else
+    print_info "harness-delegate-ng namespace not found, skipping secret creation there"
+  fi
+else
+  print_info "Docker credentials not available yet, skipping secret creation"
+  print_info "The secret will be created after Docker authentication"
+fi
+
 # Deploy Prometheus
 print_section "Deploying Prometheus"
 
@@ -388,6 +451,51 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
     print_error "Documentation push failed (this is not critical, continuing...)"
   fi
   cd ..
+
+  # Now create/update Docker Hub secret with authenticated credentials
+  print_section "Updating Docker Hub Secret for Image Pulls"
+
+  if [ -n "$DOCKER_USERNAME" ] && [ -n "$DOCKER_LOGIN_PASSWORD" ]; then
+    print_info "Creating/updating Docker Hub pull secret with authenticated credentials..."
+
+    # Create secret in default namespace
+    if kubectl get secret dockerhub-pull -n default &> /dev/null; then
+      kubectl delete secret dockerhub-pull -n default &> /dev/null
+    fi
+
+    kubectl create secret docker-registry dockerhub-pull \
+      --docker-server=https://index.docker.io/v1/ \
+      --docker-username="$DOCKER_USERNAME" \
+      --docker-password="$DOCKER_LOGIN_PASSWORD" \
+      --docker-email="${DOCKER_USERNAME}@example.com" \
+      -n default &> /dev/null
+
+    if [ $? -eq 0 ]; then
+      print_status "Docker Hub secret created/updated in default namespace"
+    else
+      print_error "Failed to create Docker Hub secret in default namespace"
+    fi
+
+    # Create secret in harness-delegate-ng namespace (if it exists)
+    if kubectl get namespace harness-delegate-ng &> /dev/null; then
+      if kubectl get secret dockerhub-pull -n harness-delegate-ng &> /dev/null; then
+        kubectl delete secret dockerhub-pull -n harness-delegate-ng &> /dev/null
+      fi
+
+      kubectl create secret docker-registry dockerhub-pull \
+        --docker-server=https://index.docker.io/v1/ \
+        --docker-username="$DOCKER_USERNAME" \
+        --docker-password="$DOCKER_LOGIN_PASSWORD" \
+        --docker-email="${DOCKER_USERNAME}@example.com" \
+        -n harness-delegate-ng &> /dev/null
+
+      if [ $? -eq 0 ]; then
+        print_status "Docker Hub secret created/updated in harness-delegate-ng namespace"
+      else
+        print_error "Failed to create Docker Hub secret in harness-delegate-ng namespace"
+      fi
+    fi
+  fi
 else
   print_info "Skipping Docker image build (--skip-docker-build flag used)"
 fi
