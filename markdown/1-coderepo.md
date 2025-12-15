@@ -14,11 +14,11 @@ This lab demonstrates Harness Code Repository's secret scanning feature, which p
 
 1. Log in to your Harness account at [app.harness.io](https://app.harness.io)
 2. Select the **"Base Demo"** project
-   ![](../images/2025-12-12_12-20-02.jpg)
+   ![](images/2025-12-12_12-20-02.jpg)
 
 3. Click on **Code Repository** module in the left navigation
 
-   ![](../images/2025-12-12_12-16-19.jpg)
+   ![](images/2025-12-12_12-16-19.jpg)
 
 
 ## Step 2: Enable Secret Scanning
@@ -40,13 +40,13 @@ This lab demonstrates Harness Code Repository's secret scanning feature, which p
 Now let's intentionally try to commit a secret to demonstrate the blocking feature:
 
 1. **Edit the file** `backend/entrypoint.sh`
-   ![](../images/2025-12-12_13-04-51.jpg)
+   ![](images/2025-12-12_13-04-51.jpg)
 
 2. **Add this line** anywhere in the file:
    ```bash
    TOKEN="02290a2a-7f5a-4836-8745-d4d797e475d0"
    ```
-   ![](../images/2025-12-12_13-04-27.jpg)
+   ![](images/2025-12-12_13-04-27.jpg)
 
 3. **Commit your Changes**:
    - Click `Commit changes` button 
@@ -58,7 +58,7 @@ The push should be **BLOCKED** with an error message similar to:
 ```
 pre-receive hook blocked reference update: "Found 1 secret(s) in your code. Push rejected."
 ```
-![](../images/2025-12-12_13-11-07.jpg)
+![](images/2025-12-12_13-11-07.jpg)
 
 > **This is Proactive Security in Action!**
 > The secret was blocked BEFORE it entered the repository, preventing it from ever appearing in the Git history.
