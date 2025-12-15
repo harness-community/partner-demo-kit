@@ -150,7 +150,7 @@ The Harness Delegate is required to execute pipelines and connect to your local 
 1. In the Harness UI, make sure your **Base Demo** project is selected in the scope box.
 2. Select **Project Settings** on the left menu
 3. Click **Delegates**
-   ![](/markdown/images/2025-12-15_15-47-36.jpg)
+   ![](images/2025-12-15_15-47-36.jpg)
 
 4. Click **Install a Delegate** (or **New Delegate** if you have existing delegates)
 
@@ -165,7 +165,7 @@ The Harness Delegate is required to execute pipelines and connect to your local 
 5. **Copy and paste**: directions in your local terminal (where your k8s cluster is running) to install the delegate
 6. After a minute or so, click **Verify**
 
-![](/markdown/images/2025-12-15_15-55-59.jpg)
+![](images/2025-12-15_15-55-59.jpg)
 
 7. Click **Done** once verified.
 

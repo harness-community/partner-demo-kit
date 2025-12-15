@@ -195,6 +195,23 @@
     body.light-mode .app-name-link {
       color: #333333 !important;
     }
+
+    /* Image zoom styles - make images clickable */
+    .markdown-section img {
+      cursor: zoom-in;
+      transition: opacity 0.2s;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .markdown-section img:hover {
+      opacity: 0.9;
+    }
+
+    /* When zoomed, show zoom-out cursor */
+    .medium-zoom-image--opened {
+      cursor: zoom-out !important;
+    }
   </style>
 </head>
 <body>
@@ -279,5 +296,28 @@
   <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-typescript.min.js"></script>
   <!-- Copy to clipboard plugin -->
   <script src="//cdn.jsdelivr.net/npm/docsify-copy-code/dist/docsify-copy-code.min.js"></script>
+  <!-- Image zoom plugin -->
+  <script src="//cdn.jsdelivr.net/npm/medium-zoom@1/dist/medium-zoom.min.js"></script>
+  <script>
+    // Initialize medium-zoom for all images
+    window.addEventListener('DOMContentLoaded', function() {
+      const zoom = mediumZoom('img:not(.app-name-link img)', {
+        background: 'rgba(0, 0, 0, 0.9)',
+        margin: 24
+      });
+
+      // Re-initialize zoom after route changes
+      window.$docsify = window.$docsify || {};
+      const originalAfterEach = window.$docsify.plugins || [];
+      window.$docsify.plugins = [
+        function(hook) {
+          hook.doneEach(function() {
+            zoom.detach();
+            zoom.attach('img:not(.app-name-link img)');
+          });
+        }
+      ].concat(originalAfterEach);
+    });
+  </script>
 </body>
 </html>

@@ -20,7 +20,7 @@ This lab walks through creating a complete CI pipeline with test intelligence, c
 4. Click **+ Create Pipeline**
    - **Name**: `Workshop Build and Deploy`
    - **Store**: Inline (for simplicity)
-5. Click **Create**
+5. Click **Start**
 
 > **Note**: Inline vs. Remote - We're using inline for this lab, but you can store pipelines in Git repositories alongside your application code.
 
@@ -28,12 +28,12 @@ This lab walks through creating a complete CI pipeline with test intelligence, c
 
 1. Click **+ Add Stage**
 2. Select **Build** as the stage type
-   ![](/markdown/images/2025-12-15_15-14-23.jpg)
+   ![](images/2025-12-15_15-14-23.jpg)
 3. Configure the build stage:
    - **Stage Name**: `Build`
    - **Clone Codebase**: Enable
    - **Repository Name**: `partner_demo_kit` (the Harness Code repository created by Terraform)
-   ![](/markdown/images/2025-12-15_15-12-17.jpg)
+   ![](images/2025-12-15_15-12-17.jpg)
 4. Click **Set Up Stage**
 
 ## Step 3: Configure Build Infrastructure
