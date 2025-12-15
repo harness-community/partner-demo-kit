@@ -20,53 +20,8 @@ This lab demonstrates Harness Code Repository's secret scanning feature, which p
 
    ![](../images/2025-12-12_12-16-19.jpg)
 
-## Step 2: Generate Clone Credentials
 
-The `partner_demo_kit` repository was created by Terraform. You need credentials to clone it:
-
-1. Click on the **"partner_demo_kit"** repository
-2. Click **"Clone"** button in the top right
-3. Click **"+Generate Clone Credential"**
-   ![](../images/2025-12-12_12-57-58.jpg)
-4. **Save the generated username and token** - you'll need these in the next step
-
-> **Tip**: Consider using [Git Credential Manager](https://github.com/git-ecosystem/git-credential-manager) to securely store and manage your Git credentials. It provides a better experience than manually entering credentials each time.
->
-> Install Git Credential Manager:
-> - **macOS**: `brew install --cask git-credential-manager`
-> - **Windows**: Download from GitHub releases
-> - **Linux**: Follow instructions on the GCM GitHub page
->
-> **If you already have credentials saved** and need to update them:
->
-> **View stored credentials:**
-> - **macOS**: Open "Keychain Access" app → search for "git.harness.io" → view/delete entries
-> - **Windows**: Search for "Credential Manager" → Windows Credentials → find the Harness entry
-> - **Linux**: `secret-tool search service git`
->
-> **Erase stored credentials:**
-> - **macOS/Linux**:
->   ```bash
->   printf "protocol=https\nhost=git.harness.io\n" | git-credential-manager erase
->   ```
-> - **Windows**: In Credential Manager → Remove the Harness entry
-> - **After erasing**: Re-clone or push to enter new credentials
-
-## Step 3: Clone the Harness Code Repository
-
-```bash
-# Clone the repository (use the URL from the Harness UI)
-git clone <harness-code-repo-url>
-cd partner_demo_kit
-
-# When prompted, enter the credentials you generated in Step 2
-# Username: <generated-username>
-# Password: <generated-token>
-```
-
-> **Note**: If using Git Credential Manager, it will securely store these credentials for future use.
-
-## Step 4: Enable Secret Scanning
+## Step 2: Enable Secret Scanning
 
 1. In Harness UI, go to **Code Repository** > **Manage Repository**
 2. Click on the **Security** tab
@@ -80,7 +35,7 @@ cd partner_demo_kit
 > - High-entropy strings that look like secrets
 > - Cloud provider credentials (AWS, Azure, GCP)
 
-## Step 5: Test Secret Scanning
+## Step 3: Test Secret Scanning
 
 Now let's intentionally try to commit a secret to demonstrate the blocking feature:
 
