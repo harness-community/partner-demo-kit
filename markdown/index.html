@@ -16,6 +16,7 @@
     /* Custom styling for dark mode */
     body {
       background-color: #1a1a1a;
+      font-size: 18px; /* Increased from default ~16px */
     }
 
     .sidebar {
@@ -24,6 +25,33 @@
 
     .content {
       padding-top: 20px;
+      font-size: 18px; /* Ensure content area also has larger text */
+    }
+
+    /* Increase paragraph and list text size */
+    .markdown-section p,
+    .markdown-section ul,
+    .markdown-section ol,
+    .markdown-section li {
+      font-size: 18px;
+      line-height: 1.7; /* Better readability with larger text */
+    }
+
+    /* Increase heading sizes proportionally */
+    .markdown-section h1 {
+      font-size: 2.5rem;
+    }
+
+    .markdown-section h2 {
+      font-size: 2rem;
+    }
+
+    .markdown-section h3 {
+      font-size: 1.5rem;
+    }
+
+    .markdown-section h4 {
+      font-size: 1.25rem;
     }
 
     /* Style for home page cards */
@@ -54,6 +82,23 @@
       border-radius: 12px;
       font-size: 0.85em;
       margin-right: 8px;
+    }
+
+    /* Improved inline code styling for dark mode */
+    code {
+      background-color: #2d2d2d !important;
+      color: #e8e8e8 !important;
+      padding: 2px 6px !important;
+      border-radius: 3px !important;
+      font-family: 'Courier New', Courier, monospace !important;
+      border: 1px solid #404040 !important;
+    }
+
+    /* Code blocks remain distinct */
+    pre code {
+      background-color: #1e1e1e !important;
+      color: #d4d4d4 !important;
+      border: none !important;
     }
   </style>
 </head>
@@ -93,6 +138,15 @@
   <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
   <!-- Pagination plugin -->
   <script src="//cdn.jsdelivr.net/npm/docsify-pagination/dist/docsify-pagination.min.js"></script>
+  <!-- Scroll to top on page navigation -->
+  <script>
+    // Auto-scroll to top when navigating between pages
+    window.addEventListener('hashchange', function() {
+      setTimeout(function() {
+        window.scrollTo(0, 0);
+      }, 100);
+    });
+  </script>
   <!-- Code highlighting -->
   <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
   <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-yaml.min.js"></script>
