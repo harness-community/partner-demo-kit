@@ -31,10 +31,7 @@ All demo resources are created in a Harness project called **"Base Demo"** to ke
   - [minikube](https://minikube.sigs.k8s.io/docs/start/) (Requires `minikube tunnel` for service access)
 - **kubectl**: Kubernetes CLI (usually included with Rancher Desktop/minikube)
 - **Helm**: Kubernetes package manager
-- **OpenTofu** or **Terraform**: Infrastructure as Code tool
-  - [OpenTofu](https://opentofu.org/docs/intro/install/) (Recommended - open-source, drop-in Terraform replacement)
-  - Terraform (v1.0+) also supported for backward compatibility
-  - The startup script will auto-detect which tool you have installed
+- **Terraform**: Infrastructure as Code tool (v1.0+)
 - **Node.js & npm**: For frontend application (Node 20+)
 - **Python**: For backend application (Python 3.8+)
 
@@ -84,10 +81,8 @@ chmod +x start-demo.sh stop-demo.sh
 The `start-demo.sh` script automates the **complete demo setup** from local infrastructure to Harness resources:
 
 **1. Prerequisites Check**
-- Verifies Docker, kubectl, and other required tools are installed
+- Verifies Docker, kubectl, Terraform, and other required tools are installed
 - Checks that Docker daemon is running
-- Auto-detects OpenTofu or Terraform (prefers OpenTofu if both installed)
-- Offers to install OpenTofu if neither tool is found
 
 **2. Kubernetes Detection & Startup**
 - Automatically detects your Kubernetes environment (minikube, Rancher Desktop, or other)
@@ -114,13 +109,12 @@ The `start-demo.sh` script automates the **complete demo setup** from local infr
 - Provides clear error messages if build or push fails
 
 **6. Harness Configuration & IaC Provisioning** (Automated!)
-- **Tool detection**: Auto-detects and uses OpenTofu or Terraform
 - **Smart credential collection**: Reuses values from previous runs or prompts for:
   - Harness Account ID (from URL when viewing your profile)
   - Harness Personal Access Token (PAT)
   - Docker Hub password/PAT (if not already logged in)
 - **Automatic configuration**: Updates `kit/se-parms.tfvars` with your values
-- **IaC execution**: Runs `tofu`/`terraform` init, plan, and apply automatically
+- **IaC execution**: Runs Terraform init, plan, and apply automatically
 - **Idempotent**: Skips if state file already exists
 - **Creates all Harness resources**: Project, connectors, environments, services, monitored services, code repository, etc.
 
@@ -144,14 +138,13 @@ The `start-demo.sh` script automates the **complete demo setup** from local infr
 ### First Run vs Subsequent Runs
 
 **First Run (Complete Setup):**
-- Detects or installs OpenTofu/Terraform
 - Prompts for:
   - Docker Hub username (unless already logged in via Docker Desktop)
   - Docker Hub password/PAT
   - Harness Account ID
   - Harness Personal Access Token (PAT)
 - Saves all credentials to `.demo-config` for future runs
-- Creates Harness resources via OpenTofu/Terraform
+- Creates Harness resources via Terraform
 - Takes ~8-12 minutes total (including Docker build and IaC provisioning)
 
 **Subsequent Runs:**
@@ -345,11 +338,10 @@ docker_password = "your-dockerhub-pat"
 
 **Important**: Also update `dockerhubaccountid` in [kit/main.tf](kit/main.tf) (line ~300) with your Docker Hub username.
 
-### Step 7: Run OpenTofu/Terraform to Create Harness Resources
+### Step 7: Run Terraform to Create Harness Resources
 
 > **Note**: The automated `start-demo.sh` script handles this step automatically. Only follow these manual steps if you skipped the automated setup or used `--skip-terraform`.
 
-**Using OpenTofu (Recommended):**
 ```bash
 # Set your Harness API token as an environment variable (Mac/Linux)
 export DEMO_BASE_PAT="pat.your-actual-token-here"
@@ -357,21 +349,13 @@ export DEMO_BASE_PAT="pat.your-actual-token-here"
 # Verify it's set
 echo $DEMO_BASE_PAT
 
-# Initialize OpenTofu
-tofu init
+# Initialize Terraform
+terraform init
 
 # Preview the changes
-tofu plan -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan
+terraform plan -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan
 
 # Apply the configuration
-tofu apply -auto-approve plan.tfplan
-```
-
-**Using Terraform (Alternative):**
-```bash
-# Same commands, but use 'terraform' instead of 'tofu'
-terraform init
-terraform plan -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan
 terraform apply -auto-approve plan.tfplan
 ```
 
@@ -422,8 +406,8 @@ Follow the step-by-step lab guides in the `markdown/` directory which walk throu
 ├── CLAUDE.md              # Instructions for Claude Code AI assistant
 ├── start-demo.sh          # Automated startup script for local infrastructure
 ├── stop-demo.sh           # Automated shutdown script for cleanup
-├── kit/                   # OpenTofu/Terraform Infrastructure as Code
-│   ├── main.tf            # Main IaC configuration (OpenTofu/Terraform compatible)
+├── kit/                   # Terraform Infrastructure as Code
+│   ├── main.tf            # Main IaC configuration
 │   ├── se-parms.tfvars    # Your configuration variables
 │   └── prometheus.yml     # Prometheus deployment
 ├── backend/               # Django backend application
@@ -452,12 +436,11 @@ Follow the step-by-step lab guides in the `markdown/` directory which walk throu
 
 ### Common Issues
 
-**Issue**: OpenTofu/Terraform fails with authentication error
+**Issue**: Terraform fails with authentication error
 - **Solution**: Verify `DEMO_BASE_PAT` environment variable is set correctly: `echo $DEMO_BASE_PAT`
 
-**Issue**: OpenTofu/Terraform not found
-- **Solution**: Install OpenTofu: `brew install opentofu` (macOS) or visit https://opentofu.org/docs/intro/install/
-- **Alternative**: Install Terraform from https://www.terraform.io/downloads
+**Issue**: Terraform not found
+- **Solution**: Install Terraform from https://www.terraform.io/downloads
 
 **Issue**: Services not accessible at localhost:8080
 - **Solution** (minikube): Ensure `minikube tunnel` is running in a separate terminal
@@ -540,7 +523,7 @@ kubectl delete namespace monitoring --ignore-not-found=true
 
 **Step 2: Delete Harness Resources**
 
-> **Important**: Delete Harness resources through the UI **before** running `tofu/terraform destroy`. This ensures proper cleanup of all dependencies.
+> **Important**: Delete Harness resources through the UI **before** running `terraform destroy`. This ensures proper cleanup of all dependencies.
 
 1. Navigate to Harness UI > **Code Repository** > Manage Repository
    - Delete **"partner_demo_kit"** repository
@@ -554,10 +537,7 @@ After deleting Harness resources through the UI:
 ```bash
 cd kit
 
-# Option A: Destroy using OpenTofu (may have some errors - safe to ignore)
-tofu destroy -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars"
-
-# Option A-alt: Destroy using Terraform (if you're using Terraform)
+# Option A: Destroy using Terraform (may have some errors - safe to ignore)
 terraform destroy -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars"
 
 # Option B: Clean slate - remove all state files

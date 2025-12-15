@@ -25,7 +25,7 @@ The repository contains three main components that work together:
 - **Structure**: Standard Django project with `backend/` (core) and `deploy/` (app) modules
 
 ### Infrastructure & Deployment
-- **OpenTofu/Terraform configs**: [kit/](kit/) - Provisions Harness resources (connectors, environments, services, monitored services)
+- **Terraform configs**: [kit/](kit/) - Provisions Harness resources (connectors, environments, services, monitored services)
 - **K8s manifests**: [harness-deploy/](harness-deploy/) - Deployment and service definitions for frontend and backend
 - **Monitoring**: Prometheus configuration at [kit/prometheus.yml](kit/prometheus.yml)
 
@@ -92,17 +92,15 @@ chmod +x start-demo.sh stop-demo.sh
 ```
 
 **What start-demo.sh automates:**
-1. Checks prerequisites (Docker, kubectl, OpenTofu/Terraform)
-2. Auto-detects OpenTofu or Terraform (prefers Terraform if already installed for backward compatibility)
-3. Offers to install OpenTofu if neither tool is found (macOS with Homebrew)
-4. Detects and starts Kubernetes (minikube/Rancher Desktop)
-5. Deploys Prometheus for continuous verification
-6. Authenticates to Docker Hub (smart detection of existing login)
-7. Builds and pushes backend Docker image
-8. **Collects Harness credentials** (Account ID, PAT, Docker password)
-9. **Updates kit/se-parms.tfvars** automatically
-10. **Runs OpenTofu/Terraform** (init, plan, apply) to create all Harness resources
-11. Saves configuration to `.demo-config` for subsequent runs
+1. Checks prerequisites (Docker, kubectl, Terraform)
+2. Detects and starts Kubernetes (minikube/Rancher Desktop)
+3. Deploys Prometheus for continuous verification
+4. Authenticates to Docker Hub (smart detection of existing login)
+5. Builds and pushes backend Docker image
+6. **Collects Harness credentials** (Account ID, PAT, Docker password)
+7. **Updates kit/se-parms.tfvars** automatically
+8. **Runs Terraform** (init, plan, apply) to create all Harness resources
+9. Saves configuration to `.demo-config` for subsequent runs
 
 **stop-demo.sh** - Cleanup script:
 ```bash
@@ -118,7 +116,7 @@ chmod +x start-demo.sh stop-demo.sh
 - Supports environment variable `DEMO_BASE_PAT` for Harness PAT
 - Detects Docker Desktop login automatically
 
-### OpenTofu/Terraform (Harness Resource Provisioning) - Manual Method
+### Terraform (Harness Resource Provisioning) - Manual Method
 
 **Important**: Set the Harness PAT as an environment variable on Mac/Linux:
 ```bash
@@ -130,12 +128,7 @@ export DEMO_BASE_PAT="pat.SAn9tg9eRrWyEJyLZ01ibw.xx"
 # Verify it's set correctly
 echo $DEMO_BASE_PAT
 
-# Using OpenTofu (recommended)
-tofu init
-tofu plan -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan
-tofu apply -auto-approve plan.tfplan
-
-# OR using Terraform (backward compatibility)
+# Run Terraform commands
 terraform init
 terraform plan -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan
 terraform apply -auto-approve plan.tfplan
@@ -237,14 +230,14 @@ Configure [kit/se-parms.tfvars](kit/se-parms.tfvars) with:
 ### Environment Setup Requirements
 - Docker and Docker Hub account with `harness-demo` repository created
 - **Kubernetes**: Either minikube with metrics-server addon OR Rancher Desktop
-- **OpenTofu** (recommended) or Terraform - IaC tool for provisioning Harness resources
+- **Terraform** - IaC tool for provisioning Harness resources
 - kubectl and helm
 - Harness account with CD, CI, and Code Repo modules enabled
 - Harness delegate installed at account level using Helm
 
 ### Harness Code Repository Git Credentials
 
-After OpenTofu/Terraform creates the `partner_demo_kit` repository in Harness Code:
+After Terraform creates the `partner_demo_kit` repository in Harness Code:
 
 1. Navigate to Harness UI > Code Repository module > "Base Demo" project
 2. Click on "partner_demo_kit" repository
@@ -293,9 +286,8 @@ To reset the demo environment and start fresh:
 cd kit
 git clean -dxf  # WARNING: Removes all untracked files including .tfstate files
 
-# OR manually destroy with OpenTofu/Terraform first:
-tofu destroy -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars"
-# OR: terraform destroy -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars"
+# OR manually destroy with Terraform first:
+terraform destroy -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars"
 ```
 
 **3. Docker Hub:**

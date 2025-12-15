@@ -524,109 +524,59 @@ EOF
   if [ -f "kit/terraform.tfstate" ] && [ -s "kit/terraform.tfstate" ]; then
     echo ""
     print_status "IaC state already exists - Harness resources appear to be configured"
-    print_info "To reconfigure, delete kit/terraform.tfstate or run: cd kit && tofu/terraform destroy"
+    print_info "To reconfigure, delete kit/terraform.tfstate or run: cd kit && terraform destroy"
     echo ""
   else
 
-    # Detect and select IaC tool (OpenTofu or Terraform)
-    print_section "Detecting Infrastructure as Code Tool"
+    # Check for Terraform
+    print_section "Checking for Terraform"
 
-    TOFU_CMD=""
-
-    # Check for terraform first (backward compatibility)
-    if command -v terraform &> /dev/null; then
-      TOFU_CMD="terraform"
-      print_status "Found Terraform: $(terraform version | head -n1)"
-      print_info "Using Terraform (backward compatibility)"
-    # Check for tofu (OpenTofu - preferred)
-    elif command -v tofu &> /dev/null; then
-      TOFU_CMD="tofu"
-      print_status "Found OpenTofu: $(tofu version | head -n1)"
-      print_info "Using OpenTofu"
-    else
-      # Neither found - prompt to install OpenTofu
-      print_error "Neither OpenTofu nor Terraform is installed"
+    if ! command -v terraform &> /dev/null; then
+      print_error "Terraform is not installed"
       echo ""
-      echo "This demo requires an Infrastructure as Code tool to provision Harness resources."
-      echo "We recommend OpenTofu (open-source Terraform alternative)."
+      echo "This demo requires Terraform to provision Harness resources."
       echo ""
       echo "Installation options:"
       echo ""
-      echo "macOS (Homebrew):"
-      echo "  brew install opentofu"
+      echo "Visit: https://www.terraform.io/downloads"
       echo ""
-      echo "Linux (snap):"
-      echo "  snap install --classic opentofu"
-      echo ""
-      echo "Windows (Chocolatey):"
-      echo "  choco install opentofu"
-      echo ""
-      echo "For other installation methods, visit: https://opentofu.org/docs/intro/install/"
-      echo ""
-      read -p "Would you like to install OpenTofu now? (y/n): " INSTALL_TOFU
-
-      if [[ "$INSTALL_TOFU" =~ ^[Yy]$ ]]; then
-        echo ""
-        print_info "Attempting to install OpenTofu via Homebrew..."
-
-        if command -v brew &> /dev/null; then
-          if brew install opentofu; then
-            print_status "OpenTofu installed successfully"
-            TOFU_CMD="tofu"
-          else
-            print_error "OpenTofu installation failed"
-            echo "Please install OpenTofu manually and run this script again."
-            cd ..
-            exit 1
-          fi
-        else
-          print_error "Homebrew not found. Please install OpenTofu manually:"
-          echo "  Visit: https://opentofu.org/docs/intro/install/"
-          cd ..
-          exit 1
-        fi
-      else
-        echo ""
-        print_info "Setup cannot continue without OpenTofu or Terraform"
-        echo "Please install one of the following and run this script again:"
-        echo "  - OpenTofu (recommended): https://opentofu.org/docs/intro/install/"
-        echo "  - Terraform: https://www.terraform.io/downloads"
-        cd ..
-        exit 1
-      fi
+      cd ..
+      exit 1
     fi
 
-    # Run IaC tool
-    print_section "Running $TOFU_CMD"
+    print_status "Found Terraform: $(terraform version | head -n1)"
+
+    # Run Terraform
+    print_section "Running Terraform"
 
     cd kit
 
     # Initialize
-    print_info "Running $TOFU_CMD init..."
-    if $TOFU_CMD init &> /dev/null; then
-      print_status "$TOFU_CMD initialized"
+    print_info "Running terraform init..."
+    if terraform init &> /dev/null; then
+      print_status "Terraform initialized"
     else
-      print_error "$TOFU_CMD init failed"
+      print_error "Terraform init failed"
       cd ..
       exit 1
     fi
 
     # Plan
-    print_info "Running $TOFU_CMD plan (this may take 1-2 minutes)..."
-    if $TOFU_CMD plan -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan &> /dev/null; then
-      print_status "$TOFU_CMD plan created"
+    print_info "Running terraform plan (this may take 1-2 minutes)..."
+    if terraform plan -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan &> /dev/null; then
+      print_status "Terraform plan created"
     else
-      print_error "$TOFU_CMD plan failed. Run manually to see errors: cd kit && $TOFU_CMD plan -var=\"pat=$HARNESS_PAT\" -var-file=\"se-parms.tfvars\""
+      print_error "Terraform plan failed. Run manually to see errors: cd kit && terraform plan -var=\"pat=$HARNESS_PAT\" -var-file=\"se-parms.tfvars\""
       cd ..
       exit 1
     fi
 
     # Apply
-    print_info "Running $TOFU_CMD apply (this may take 3-5 minutes)..."
-    if $TOFU_CMD apply -auto-approve plan.tfplan; then
-      print_status "$TOFU_CMD apply completed - Harness resources created!"
+    print_info "Running terraform apply (this may take 3-5 minutes)..."
+    if terraform apply -auto-approve plan.tfplan; then
+      print_status "Terraform apply completed - Harness resources created!"
     else
-      print_error "$TOFU_CMD apply failed"
+      print_error "Terraform apply failed"
       cd ..
       exit 1
     fi

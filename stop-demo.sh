@@ -312,7 +312,7 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
     fi
   else
     # We have a state file, use IaC to destroy
-    print_info "Found IaC state file - will use OpenTofu/Terraform to destroy resources"
+    print_info "Found IaC state file - will use Terraform to destroy resources"
 
     # Prompt for confirmation
     echo ""
@@ -340,28 +340,20 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
       if [ -z "$HARNESS_PAT" ]; then
         print_info "Skipping Harness resource deletion (PAT not provided)"
       else
-        # Detect which IaC tool to use
-        TOFU_CMD=""
-        if command -v tofu &> /dev/null; then
-          TOFU_CMD="tofu"
-          print_status "Using OpenTofu for destroy"
-        elif command -v terraform &> /dev/null; then
-          TOFU_CMD="terraform"
-          print_status "Using Terraform for destroy"
+        # Check for Terraform
+        if ! command -v terraform &> /dev/null; then
+          print_error "Terraform not found"
+          print_info "Cannot destroy Harness resources without Terraform"
+          print_info "Please install Terraform, or delete resources manually through Harness UI"
         else
-          print_error "Neither OpenTofu nor Terraform found"
-          print_info "Cannot destroy Harness resources without IaC tool"
-          print_info "Please install OpenTofu or Terraform, or delete resources manually through Harness UI"
-        fi
-
-        if [ -n "$TOFU_CMD" ]; then
-          print_info "Running $TOFU_CMD destroy (this may take 2-3 minutes)..."
+          print_status "Using Terraform for destroy"
+          print_info "Running terraform destroy (this may take 2-3 minutes)..."
 
           cd kit
-          if $TOFU_CMD destroy -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -auto-approve; then
+          if terraform destroy -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -auto-approve; then
             print_status "Harness resources destroyed successfully"
           else
-            print_error "$TOFU_CMD destroy encountered errors"
+            print_error "Terraform destroy encountered errors"
             print_info "Some resources may have been deleted. Check kit/terraform.tfstate"
             print_info "You may need to manually delete remaining resources through Harness UI"
           fi
@@ -452,7 +444,7 @@ if [ "$DELETE_CONFIG_FILES" = true ]; then
   echo "  - .demo-config (cached credentials)"
   echo "  - kit/se-parms.tfvars (Terraform variables)"
   echo "  - kit/terraform.tfstate* (IaC state files)"
-  echo "  - kit/.terraform/ or kit/.tofu/ (IaC working directories)"
+  echo "  - kit/.terraform/ (IaC working directory)"
   echo "  - kit/*.tfplan (Terraform plan files)"
   echo ""
   echo "After deletion, you will need to re-enter credentials on next run."
@@ -489,12 +481,6 @@ if [ "$DELETE_CONFIG_FILES" = true ]; then
     if [ -d "kit/.terraform" ]; then
       rm -rf kit/.terraform
       print_status "Deleted kit/.terraform/"
-      FILES_DELETED=true
-    fi
-
-    if [ -d "kit/.tofu" ]; then
-      rm -rf kit/.tofu
-      print_status "Deleted kit/.tofu/"
       FILES_DELETED=true
     fi
 
