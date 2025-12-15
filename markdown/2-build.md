@@ -38,7 +38,7 @@ This lab walks through creating a complete CI pipeline with test intelligence, c
 
 You have several options for build infrastructure. Choose the one that best fits your needs:
 
-### Option A: Harness Cloud (Recommended for Verified Accounts)
+### Option A: Harness Cloud (Recommended)
 
 > **Important**: Harness Cloud is available for verified Harness accounts. If you're using a new or free-tier account, you may need to use Option B (Kubernetes) instead.
 
@@ -58,7 +58,7 @@ You have several options for build infrastructure. Choose the one that best fits
 
 ### Option B: Kubernetes Build Farm (Alternative)
 
-If Harness Cloud is not available, you can use your local Kubernetes cluster:
+If you do not wish to use Harness Cloud, you can use your local Kubernetes cluster:
 
 1. On the **Infrastructure** tab
 2. Select **Kubernetes**

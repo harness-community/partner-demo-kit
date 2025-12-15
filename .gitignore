@@ -51,3 +51,5 @@ next-env.d.ts
 .demo-config
 kit/se-parms.tfvars
 kit/se-parms.tfvars
+kit/terraform.tfstate.backup.opentofu
+kit/terraform.tfstate.opentofu-backup
