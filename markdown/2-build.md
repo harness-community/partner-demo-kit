@@ -224,5 +224,3 @@ Your pipeline now has these components:
   - Cache Intelligence (optional, Harness Cloud only)
 
 ---
-
-**Next**: Proceed to [Lab 3: Frontend Deployment](3-cd-frontend.md)

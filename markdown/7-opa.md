@@ -134,5 +134,3 @@ contains(arr, elem) {
 ### That's all for now. We hope you enjoyed your hands-on experience with the Harness platform. <br> 📈 We are always looking to improve so please rate your experience and share any suggestions or issues you may have encountered. Thank you!
 
 ===============
-
-Click the **Check** button to continue.

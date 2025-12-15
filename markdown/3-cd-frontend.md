@@ -156,5 +156,3 @@ Your pipeline now includes:
    - Uses Dev environment and K8s Dev infrastructure
 
 ---
-
-**Next**: Proceed to [Lab 4: Backend Deployment with Canary](4-cd-backend.md)

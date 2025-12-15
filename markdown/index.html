@@ -23,6 +23,38 @@
       background-color: #242424;
     }
 
+    /* Logo styling - stack text below and add padding */
+    .sidebar .app-name {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      padding: 10px !important;
+    }
+
+    .app-name-link {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      gap: 8px !important;
+      color: #e8e8e8 !important;
+      font-size: 15px !important;
+    }
+
+    .app-name-link img {
+      background-color: transparent !important;
+      padding: 5px !important;
+      margin: 0 !important;
+      display: block !important;
+    }
+
+    /* Ensure name text is visible */
+    .sidebar .app-name-link p,
+    .sidebar h1 {
+      color: #e8e8e8 !important;
+      margin: 0 !important;
+      font-size: 15px !important;
+    }
+
     .content {
       padding-top: 20px;
       font-size: 18px; /* Ensure content area also has larger text */
@@ -107,7 +139,7 @@
   <script>
     window.$docsify = {
       name: 'Demo Kit',
-      logo: 'images/univ-partner-logo.png',
+      logo: 'images/univ-partner-logo.svg',
       repo: 'harness-community/partner-demo-kit',
       loadSidebar: true,
       autoHeader: true,

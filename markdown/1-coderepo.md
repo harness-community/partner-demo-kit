@@ -91,5 +91,3 @@ Remove the test secret from your local file:
 > **Note**: Since the push was blocked, the secret never entered the repository. You only need to clean up your local working directory.
 
 ---
-
-**Next**: Proceed to [Lab 2: CI Pipeline Setup](2-build.md)

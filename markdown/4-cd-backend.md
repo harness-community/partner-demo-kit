@@ -179,6 +179,4 @@ Your complete pipeline now includes:
 
 ---
 
-**Next**: Proceed to [Lab 6: Continuous Verification](6-cv.md) to add automated deployment validation
-
 > **Note**: Lab 5 (Security Testing) is available only with a licensed partner organization

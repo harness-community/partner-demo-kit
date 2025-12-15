@@ -177,4 +177,3 @@ The demo consists of these labs:
 
 ---
 
-**Next**: Proceed to [Lab 1: Code Repository Secret Scanning](1-coderepo.md)

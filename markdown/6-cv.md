@@ -171,6 +171,4 @@ Your complete pipeline now includes:
 
 ---
 
-**Next**: Proceed to [Lab 7: OPA Policy Enforcement](7-opa.md)
-
 > **Note**: Lab 5 (Security Testing) and Lab 7 (OPA Policy) are available only with a licensed partner organization

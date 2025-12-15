@@ -73,7 +73,4 @@ For access to STO capabilities:
 3. Gain access to licensed features including STO, SSCA, and advanced policy enforcement
 
 ---
-
-**Next**: Proceed to [Lab 6: Continuous Verification](6-cv.md)
-
 > **Note**: You can proceed with Lab 6 (Continuous Verification) which is available in the Base Demo project without additional licensing.
