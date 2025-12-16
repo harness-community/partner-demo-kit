@@ -160,7 +160,7 @@ The Harness Delegate is required to execute pipelines and connect to your local 
 
 1. **Select delegate type**: Choose **Kubernetes**
 2. **Select installation method**: Choose **Helm Chart**
-3. **Name your delegate**: Enter a meaningful name (e.g., `local-k8s-delegate`)
+3. **Name your delegate**: It must be `local-k8s-delegate` for the pre-created connectors to work.
 4. **Copy and paste**: the 2 lines to add the chart repo to the local helm registry in your terminal.
 5. **Copy and paste**: directions in your local terminal (where your k8s cluster is running) to install the delegate
 6. After a minute or so, click **Verify**
