@@ -38,7 +38,7 @@ This lab walks through creating a complete CI pipeline with test intelligence, c
 
 ## Step 3: Configure Build Infrastructure
 
-> **Note**: The `./start-demo.sh` script automatically creates a Docker Hub secret (`dockerhub-pull`) in your Kubernetes cluster. This secret allows build pods to pull Harness CI images like `harness/ci-addon` from Docker Hub using your authenticated credentials.
+> **Note**: The `./start-demo.sh` script automatically creates a Docker Hub secret (`dockerhub-pull`) in your Kubernetes cluster and attaches it to the default service account. This allows build pods to pull Harness CI images like `harness/ci-addon` from Docker Hub using your authenticated credentials (Docker Hub Personal Access Token).
 
 You have several options for build infrastructure. Choose the one that best fits your needs:
 

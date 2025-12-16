@@ -333,7 +333,7 @@ cd ../kit
 ```hcl
 account_id = "your-harness-account-id"
 docker_username = "your-dockerhub-username"
-docker_password = "your-dockerhub-pat"
+DOCKER_PAT = "your-dockerhub-pat"
 ```
 
 **Important**: Also update `dockerhubaccountid` in [kit/main.tf](kit/main.tf) (line ~300) with your Docker Hub username.

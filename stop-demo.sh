@@ -105,14 +105,14 @@ CONFIG_FILE=".demo-config"
 HARNESS_ACCOUNT_ID=""
 HARNESS_PAT=""
 DOCKER_USERNAME=""
-DOCKER_PASSWORD=""
+DOCKER_PAT=""
 
 if [ -f "$CONFIG_FILE" ]; then
   print_info "Loading credentials from $CONFIG_FILE..."
   HARNESS_ACCOUNT_ID=$(grep "HARNESS_ACCOUNT_ID=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
   HARNESS_PAT=$(grep "HARNESS_PAT=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
   DOCKER_USERNAME=$(grep "DOCKER_USERNAME=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
-  DOCKER_PASSWORD=$(grep "DOCKER_PASSWORD=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+  DOCKER_PAT=$(grep "DOCKER_PAT=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
 
   # Show what was loaded (for debugging)
   if [ -n "$HARNESS_ACCOUNT_ID" ]; then
@@ -124,7 +124,7 @@ if [ -f "$CONFIG_FILE" ]; then
   if [ -n "$DOCKER_USERNAME" ]; then
     print_status "Loaded Docker username from config"
   fi
-  if [ -n "$DOCKER_PASSWORD" ]; then
+  if [ -n "$DOCKER_PAT" ]; then
     print_status "Loaded Docker password from config"
   fi
 else
@@ -151,9 +151,9 @@ if [ -f "kit/se-parms.tfvars" ]; then
       print_status "Loaded Docker username from kit/se-parms.tfvars"
     fi
   fi
-  if [ -z "$DOCKER_PASSWORD" ]; then
-    DOCKER_PASSWORD=$(grep docker_password kit/se-parms.tfvars 2>/dev/null | cut -d'"' -f2)
-    if [ -n "$DOCKER_PASSWORD" ]; then
+  if [ -z "$DOCKER_PAT" ]; then
+    DOCKER_PAT=$(grep DOCKER_PAT kit/se-parms.tfvars 2>/dev/null | cut -d'"' -f2)
+    if [ -n "$DOCKER_PAT" ]; then
       print_status "Loaded Docker password from kit/se-parms.tfvars"
     fi
   fi
@@ -377,17 +377,17 @@ if [ "$DELETE_DOCKER_REPO" = true ]; then
     read -p "Enter your Docker Hub username (or press Enter to skip): " DOCKER_USERNAME
   fi
 
-  if [ -z "$DOCKER_PASSWORD" ] || [ "$DOCKER_PASSWORD" = "logged-in-via-docker-desktop" ]; then
+  if [ -z "$DOCKER_PAT" ] || [ "$DOCKER_PAT" = "logged-in-via-docker-desktop" ]; then
     echo ""
     print_info "Docker Hub password/PAT not found in config files"
     echo "To create a PAT: https://hub.docker.com/settings/security"
     echo ""
-    read -sp "Enter your Docker Hub password/PAT (or press Enter to skip): " DOCKER_PASSWORD
+    read -sp "Enter your Docker Hub password/PAT (or press Enter to skip): " DOCKER_PAT
     echo ""
   fi
 
   # Check again after prompting
-  if [ -z "$DOCKER_USERNAME" ] || [ -z "$DOCKER_PASSWORD" ] || [ "$DOCKER_PASSWORD" = "logged-in-via-docker-desktop" ]; then
+  if [ -z "$DOCKER_USERNAME" ] || [ -z "$DOCKER_PAT" ] || [ "$DOCKER_PAT" = "logged-in-via-docker-desktop" ]; then
     print_info "Skipping Docker Hub repository deletion (credentials not provided)"
   else
     # Prompt for confirmation
@@ -405,7 +405,7 @@ if [ "$DELETE_DOCKER_REPO" = true ]; then
       TOKEN_RESPONSE=$(curl -s -X POST \
         "https://hub.docker.com/v2/users/login" \
         -H "Content-Type: application/json" \
-        -d "{\"username\":\"${DOCKER_USERNAME}\",\"password\":\"${DOCKER_PASSWORD}\"}")
+        -d "{\"username\":\"${DOCKER_USERNAME}\",\"password\":\"${DOCKER_PAT}\"}")
 
       JWT_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"token":"[^"]*' | cut -d'"' -f4)
 

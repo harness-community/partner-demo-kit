@@ -153,11 +153,11 @@ print_section "Creating Docker Hub Secret for Image Pulls"
 CONFIG_FILE=".demo-config"
 if [ -f "$CONFIG_FILE" ]; then
   DOCKER_USERNAME=$(grep "DOCKER_USERNAME=" "$CONFIG_FILE" | cut -d'=' -f2)
-  DOCKER_PASSWORD=$(grep "DOCKER_PASSWORD=" "$CONFIG_FILE" | cut -d'=' -f2)
+  DOCKER_PAT=$(grep "DOCKER_PAT=" "$CONFIG_FILE" | cut -d'=' -f2)
 fi
 
 # Check if we have credentials
-if [ -n "$DOCKER_USERNAME" ] && [ -n "$DOCKER_PASSWORD" ] && [ "$DOCKER_PASSWORD" != "logged-in-via-docker-desktop" ]; then
+if [ -n "$DOCKER_USERNAME" ] && [ -n "$DOCKER_PAT" ] && [ "$DOCKER_PAT" != "logged-in-via-docker-desktop" ]; then
   print_info "Creating Docker Hub pull secret with saved credentials..."
 
   # Create secret in default namespace
@@ -169,7 +169,7 @@ if [ -n "$DOCKER_USERNAME" ] && [ -n "$DOCKER_PASSWORD" ] && [ "$DOCKER_PASSWORD
   kubectl create secret docker-registry dockerhub-pull \
     --docker-server=https://index.docker.io/v1/ \
     --docker-username="$DOCKER_USERNAME" \
-    --docker-password="$DOCKER_PASSWORD" \
+    --docker-password="$DOCKER_PAT" \
     --docker-email="${DOCKER_USERNAME}@example.com" \
     -n default &> /dev/null
 
@@ -189,18 +189,26 @@ if [ -n "$DOCKER_USERNAME" ] && [ -n "$DOCKER_PASSWORD" ] && [ "$DOCKER_PASSWORD
     kubectl create secret docker-registry dockerhub-pull \
       --docker-server=https://index.docker.io/v1/ \
       --docker-username="$DOCKER_USERNAME" \
-      --docker-password="$DOCKER_PASSWORD" \
+      --docker-password="$DOCKER_PAT" \
       --docker-email="${DOCKER_USERNAME}@example.com" \
       -n harness-delegate-ng &> /dev/null
 
     if [ $? -eq 0 ]; then
       print_status "Docker Hub secret created in harness-delegate-ng namespace"
+
+      # Attach secret to default service account
+      kubectl patch serviceaccount default -n harness-delegate-ng -p '{"imagePullSecrets": [{"name": "dockerhub-pull"}]}' &> /dev/null
+      print_status "Attached secret to default service account in harness-delegate-ng"
     else
       print_error "Failed to create Docker Hub secret in harness-delegate-ng namespace"
     fi
   else
     print_info "harness-delegate-ng namespace not found, skipping secret creation there"
   fi
+
+  # Attach secret to default service account in default namespace
+  kubectl patch serviceaccount default -n default -p '{"imagePullSecrets": [{"name": "dockerhub-pull"}]}' &> /dev/null
+  print_status "Attached secret to default service account in default namespace"
 else
   print_info "Docker credentials not available yet, skipping secret creation"
   print_info "The secret will be created after Docker authentication"
@@ -272,7 +280,7 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
   # Load cached username/password if available
   if [ -f "$CONFIG_FILE" ]; then
     DOCKER_USERNAME=$(grep "DOCKER_USERNAME=" "$CONFIG_FILE" | cut -d'=' -f2)
-    DOCKER_LOGIN_PASSWORD=$(grep "DOCKER_PASSWORD=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+    DOCKER_LOGIN_PASSWORD=$(grep "DOCKER_PAT=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
   fi
 
   if [ -n "$DOCKER_USERNAME" ]; then
@@ -327,11 +335,11 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
 
   # Load cached password/PAT
   if [ -f "$CONFIG_FILE" ]; then
-    DOCKER_LOGIN_PASSWORD=$(grep "DOCKER_PASSWORD=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+    DOCKER_LOGIN_PASSWORD=$(grep "DOCKER_PAT=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
   fi
 
   if [ -z "$DOCKER_LOGIN_PASSWORD" ] && [ -f "kit/se-parms.tfvars" ]; then
-    DOCKER_LOGIN_PASSWORD=$(grep docker_password kit/se-parms.tfvars | cut -d'"' -f2 2>/dev/null || echo "")
+    DOCKER_LOGIN_PASSWORD=$(grep DOCKER_PAT kit/se-parms.tfvars | cut -d'"' -f2 2>/dev/null || echo "")
   fi
 
   if [ "$DOCKER_LOGIN_PASSWORD" = "logged-in-via-docker-desktop" ]; then
@@ -386,7 +394,7 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
     if [ ! -f "$CONFIG_FILE" ] || [ ! -s "$CONFIG_FILE" ]; then
       {
         echo "DOCKER_USERNAME=$DOCKER_USERNAME"
-        echo "DOCKER_PASSWORD=$DOCKER_LOGIN_PASSWORD"
+        echo "DOCKER_PAT=$DOCKER_LOGIN_PASSWORD"
       } > "$CONFIG_FILE"
       print_info "Saved credentials to $CONFIG_FILE for future runs"
     fi
@@ -491,10 +499,18 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
 
       if [ $? -eq 0 ]; then
         print_status "Docker Hub secret created/updated in harness-delegate-ng namespace"
+
+        # Attach secret to default service account
+        kubectl patch serviceaccount default -n harness-delegate-ng -p '{"imagePullSecrets": [{"name": "dockerhub-pull"}]}' &> /dev/null
+        print_status "Attached secret to service account in harness-delegate-ng"
       else
         print_error "Failed to create Docker Hub secret in harness-delegate-ng namespace"
       fi
     fi
+
+    # Attach secret to default service account in default namespace
+    kubectl patch serviceaccount default -n default -p '{"imagePullSecrets": [{"name": "dockerhub-pull"}]}' &> /dev/null
+    print_status "Attached secret to service account in default namespace"
   fi
 else
   print_info "Skipping Docker image build (--skip-docker-build flag used)"
@@ -510,7 +526,7 @@ if [ "$SKIP_TERRAFORM" = false ]; then
   # Collect required variables (or load from cache)
   HARNESS_ACCOUNT_ID=""
   HARNESS_PAT=""
-  DOCKER_PASSWORD=""
+  DOCKER_PAT=""
 
   print_info "Checking cached credentials..."
   echo ""
@@ -578,16 +594,16 @@ if [ "$SKIP_TERRAFORM" = false ]; then
   # Get Docker password/PAT
   # Try to get from config file first
   if [ -f "$CONFIG_FILE" ]; then
-    DOCKER_PASSWORD=$(grep "DOCKER_PASSWORD=" "$CONFIG_FILE" | cut -d'=' -f2)
+    DOCKER_PAT=$(grep "DOCKER_PAT=" "$CONFIG_FILE" | cut -d'=' -f2)
   fi
 
   # If still not found, use a placeholder (should have been saved during Docker build section)
-  if [ -z "$DOCKER_PASSWORD" ]; then
+  if [ -z "$DOCKER_PAT" ]; then
     # Check if we're logged in to Docker Hub (might have been logged in via Docker Desktop on first run)
     LOGGED_IN_USER=$(docker info 2>/dev/null | grep "Username:" | awk '{print $2}')
     if [ -n "$LOGGED_IN_USER" ]; then
       print_status "Using Docker Hub session (logged in via Docker Desktop)"
-      DOCKER_PASSWORD="logged-in-via-docker-desktop"
+      DOCKER_PAT="logged-in-via-docker-desktop"
     else
       # This shouldn't happen if the Docker build section ran, but handle it anyway
       print_info "Docker Hub password not found in cache"
@@ -595,12 +611,12 @@ if [ "$SKIP_TERRAFORM" = false ]; then
       echo "Enter your Docker Hub password or Personal Access Token (PAT)"
       echo "To create a PAT: https://hub.docker.com/settings/security"
       echo ""
-      read -sp "Docker Hub password/PAT: " DOCKER_PASSWORD
+      read -sp "Docker Hub password/PAT: " DOCKER_PAT
       echo ""
 
-      while [ -z "$DOCKER_PASSWORD" ]; do
+      while [ -z "$DOCKER_PAT" ]; do
         print_error "Password/PAT cannot be empty"
-        read -sp "Docker Hub password/PAT: " DOCKER_PASSWORD
+        read -sp "Docker Hub password/PAT: " DOCKER_PAT
         echo ""
       done
     fi
@@ -613,7 +629,7 @@ if [ "$SKIP_TERRAFORM" = false ]; then
     echo "DOCKER_USERNAME=$DOCKER_USERNAME"
     echo "HARNESS_ACCOUNT_ID=$HARNESS_ACCOUNT_ID"
     echo "HARNESS_PAT=$HARNESS_PAT"
-    echo "DOCKER_PASSWORD=$DOCKER_PASSWORD"
+    echo "DOCKER_PAT=$DOCKER_PAT"
   } > "$CONFIG_FILE"
   print_status "Saved credentials to $CONFIG_FILE for future runs"
   echo ""
@@ -624,7 +640,7 @@ if [ "$SKIP_TERRAFORM" = false ]; then
 account_id = "$HARNESS_ACCOUNT_ID"
 
 docker_username = "$DOCKER_USERNAME"
-docker_password = "$DOCKER_PASSWORD"
+DOCKER_PAT = "$DOCKER_PAT"
 EOF
   print_status "Updated se-parms.tfvars with your configuration"
 

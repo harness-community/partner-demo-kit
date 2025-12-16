@@ -228,7 +228,7 @@ Throughout the codebase, replace the placeholder `dockerhubaccountid` with your 
 Configure [kit/se-parms.tfvars](kit/se-parms.tfvars) with:
 - `account_id`: Your Harness account ID (found in URL when viewing your profile)
 - `docker_username`: Docker Hub username
-- `docker_password`: Docker Hub password/PAT
+- `DOCKER_PAT`: Docker Hub password/PAT
 
 ### Environment Setup Requirements
 - Docker and Docker Hub account with `harness-demo` repository created

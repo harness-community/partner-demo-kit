@@ -10,7 +10,7 @@ terraform {
 variable "account_id" {}
 variable "pat" {}
 variable "docker_username" {}
-variable "docker_password" {}
+variable "DOCKER_PAT" {}
 
 variable "org_id" {
   default = "default"
@@ -82,14 +82,14 @@ resource "harness_platform_secret_text" "docker_username" {
   ]
 }
 
-resource "harness_platform_secret_text" "docker_password" {
-  identifier                = "docker_password"
+resource "harness_platform_secret_text" "DOCKER_PAT" {
+  identifier                = "DOCKER_PAT"
   name                      = "docker-pw"
   org_id                    = var.org_id
   project_id                = harness_platform_project.base_demo.identifier
   secret_manager_identifier = "harnessSecretManager"
   value_type               = "Inline"
-  value                    = var.docker_password
+  value                    = var.DOCKER_PAT
 
   depends_on = [
     harness_platform_project.base_demo
@@ -107,13 +107,13 @@ resource "harness_platform_connector_docker" "workshopdocker" {
 
   credentials {
     username_ref = harness_platform_secret_text.docker_username.identifier
-    password_ref = harness_platform_secret_text.docker_password.identifier
+    password_ref = harness_platform_secret_text.DOCKER_PAT.identifier
   }
 
   depends_on = [
     harness_platform_project.base_demo,
     harness_platform_secret_text.docker_username,
-    harness_platform_secret_text.docker_password
+    harness_platform_secret_text.DOCKER_PAT
   ]
 }
 
