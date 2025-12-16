@@ -283,6 +283,42 @@ else
   print_status "No application pods found"
 fi
 
+# Delete Harness Delegate namespace and resources
+print_section "Cleaning Up Harness Delegate"
+if kubectl get namespace harness-delegate-ng &> /dev/null; then
+  print_info "Found harness-delegate-ng namespace"
+
+  # Delete all deployments in the delegate namespace
+  DELEGATE_DEPLOYMENTS=$(kubectl get deployments -n harness-delegate-ng --no-headers 2>/dev/null | awk '{print $1}')
+  if [ -n "$DELEGATE_DEPLOYMENTS" ]; then
+    print_info "Deleting delegate deployments..."
+    echo "$DELEGATE_DEPLOYMENTS" | while read -r deployment; do
+      kubectl delete deployment "$deployment" -n harness-delegate-ng --ignore-not-found=true
+    done
+    print_status "Delegate deployments deleted"
+  fi
+
+  # Wait for delegate pods to terminate
+  print_info "Waiting for delegate pods to terminate..."
+  WAIT_TIME=0
+  MAX_WAIT=60
+  while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+    DELEGATE_PODS=$(kubectl get pods -n harness-delegate-ng --no-headers 2>/dev/null | wc -l)
+    if [ "$DELEGATE_PODS" -eq 0 ]; then
+      break
+    fi
+    sleep 2
+    WAIT_TIME=$((WAIT_TIME + 2))
+  done
+
+  # Delete the namespace
+  print_info "Deleting harness-delegate-ng namespace..."
+  kubectl delete namespace harness-delegate-ng --ignore-not-found=true &> /dev/null || true
+  print_status "Harness delegate namespace deleted"
+else
+  print_info "Harness delegate namespace not found (already deleted)"
+fi
+
 # Delete Prometheus (optional)
 if [ "$DELETE_PROMETHEUS" = true ]; then
   print_section "Deleting Prometheus"
