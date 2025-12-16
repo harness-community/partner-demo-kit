@@ -84,7 +84,7 @@ resource "harness_platform_secret_text" "docker_username" {
 
 resource "harness_platform_secret_text" "DOCKER_PAT" {
   identifier                = "DOCKER_PAT"
-  name                      = "docker-pw"
+  name                      = "docker-pat"
   org_id                    = var.org_id
   project_id                = harness_platform_project.base_demo.identifier
   secret_manager_identifier = "harnessSecretManager"
