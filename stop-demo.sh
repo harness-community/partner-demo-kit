@@ -264,13 +264,30 @@ else
   print_info "Documentation service not found (already deleted)"
 fi
 
-# Delete any remaining pods
+# Delete any remaining pods and wait for full termination
 print_info "Checking for remaining application pods..."
 REMAINING_PODS=$(kubectl get pods --no-headers 2>/dev/null | grep -E "frontend|backend" | wc -l)
 if [ "$REMAINING_PODS" -gt 0 ]; then
-  print_info "Waiting for pods to terminate..."
-  sleep 5
-  print_status "Application pods cleaned up"
+  print_info "Waiting for $REMAINING_PODS pod(s) to fully terminate..."
+
+  # Wait up to 60 seconds for pods to terminate
+  WAIT_TIME=0
+  MAX_WAIT=60
+  while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+    REMAINING=$(kubectl get pods --no-headers 2>/dev/null | grep -E "frontend|backend" | wc -l)
+    if [ "$REMAINING" -eq 0 ]; then
+      break
+    fi
+    sleep 2
+    WAIT_TIME=$((WAIT_TIME + 2))
+  done
+
+  FINAL_COUNT=$(kubectl get pods --no-headers 2>/dev/null | grep -E "frontend|backend" | wc -l)
+  if [ "$FINAL_COUNT" -eq 0 ]; then
+    print_status "All application pods terminated"
+  else
+    print_info "$FINAL_COUNT pod(s) still terminating (may take a bit longer)"
+  fi
 else
   print_status "No application pods found"
 fi
@@ -340,12 +357,38 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
       if [ -z "$HARNESS_PAT" ]; then
         print_info "Skipping Harness resource deletion (PAT not provided)"
       else
+        # First, delete the pipeline to remove references to connectors, templates, etc.
+        if [ -n "$HARNESS_ACCOUNT_ID" ] && [ -n "$HARNESS_PAT" ]; then
+          print_section "Deleting Harness Pipeline"
+          print_info "Deleting 'Workshop Build and Deploy' pipeline..."
+
+          # Try to delete the pipeline via API
+          PIPELINE_DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
+            "https://app.harness.io/pipeline/api/pipelines/Workshop_Build_and_Deploy?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default&projectIdentifier=Base_Demo" \
+            -H "x-api-key: ${HARNESS_PAT}" 2>/dev/null)
+
+          HTTP_CODE=$(echo "$PIPELINE_DELETE_RESPONSE" | tail -n 1)
+
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "204" ]; then
+            print_status "Pipeline deleted successfully"
+          elif [ "$HTTP_CODE" = "404" ]; then
+            print_info "Pipeline not found (may already be deleted or not created yet)"
+          else
+            print_info "Could not delete pipeline via API (HTTP $HTTP_CODE)"
+            print_info "This is OK if the pipeline doesn't exist yet"
+          fi
+
+          # Wait a moment for Harness to process the deletion
+          sleep 2
+        fi
+
         # Check for Terraform
         if ! command -v terraform &> /dev/null; then
           print_error "Terraform not found"
           print_info "Cannot destroy Harness resources without Terraform"
           print_info "Please install Terraform, or delete resources manually through Harness UI"
         else
+          print_section "Running Terraform Destroy"
           print_status "Using Terraform for destroy"
           print_info "Running terraform destroy (this may take 2-3 minutes)..."
 
@@ -355,7 +398,14 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
           else
             print_error "Terraform destroy encountered errors"
             print_info "Some resources may have been deleted. Check kit/terraform.tfstate"
-            print_info "You may need to manually delete remaining resources through Harness UI"
+            print_info ""
+            print_info "Common issues:"
+            print_info "  • Pipeline still exists - Delete it manually in Harness UI"
+            print_info "  • Active service instances - Wait for all pods to terminate"
+            print_info "  • Resources referenced elsewhere - Check Harness UI for dependencies"
+            print_info ""
+            print_info "After fixing issues, you can retry terraform destroy:"
+            print_info "  cd kit && terraform destroy -var=\"pat=\$DEMO_BASE_PAT\" -var-file=\"se-parms.tfvars\""
           fi
           cd ..
         fi
