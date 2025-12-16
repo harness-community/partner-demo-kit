@@ -286,7 +286,7 @@ if [ "$REMAINING_PODS" -gt 0 ]; then
   if [ "$FINAL_COUNT" -eq 0 ]; then
     print_status "All application pods terminated"
   else
-    print_info "$FINAL_COUNT pod(s) still terminating (may take a bit longer)"
+    print_info "$FINAL_COUNT pod(s) still terminating (may take 1-2 full minutes)"
   fi
 else
   print_status "No application pods found"
