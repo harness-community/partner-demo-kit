@@ -1,5 +1,5 @@
 <div class="container" style="background-color: black; width:600px">
-  <div class="row" style="width:200px">
+  <div class="row" style="width:350px">
     <div class="col">
       <button class="btn" (click)="run()" style="margin:0;padding:0"><svg xmlns="http://www.w3.org/2000/svg" width="40" height="45" fill="#FFFFFF" class="bi bi-play-btn" viewBox="0 0 16 16">
         <path d="M6.79 5.093A.5.5 0 0 0 6 5.5v5a.5.5 0 0 0 .79.407l3.5-2.5a.5.5 0 0 0 0-.814z"/>
@@ -12,6 +12,14 @@
         <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466"/>
       </svg></button>
     </div>
+    <div class="col">
+      <button type="button" class="btn" (click)="toggleChartType()" style="margin:0;padding:0; margin-top:7px;">
+        <svg style="border: 2px solid white; border-radius: 5px;" xmlns="http://www.w3.org/2000/svg" width="30" height="30" fill="#FFFFFF" class="bi bi-bar-chart" viewBox="0 0 16 16">
+          <path *ngIf="showBarChart" d="M4 11H2v3h2zm5-4H7v7h2zm5-5v12h-2V2zm-2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM6 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zm-5 4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1z"/>
+          <path *ngIf="!showBarChart" d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v12a.5.5 0 0 1-.5.5H2a.5.5 0 0 1-.5-.5zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm3.646 10.854a.5.5 0 0 1-.708-.708l2-2a.5.5 0 0 1 .708 0L9 9.5l2.646-2.647a.5.5 0 0 1 .708.708l-3 3a.5.5 0 0 1-.708 0L7 9.207z"/>
+        </svg>
+      </button>
+    </div>
   </div>
 
   <div class="row">
@@ -20,13 +28,30 @@
 				<div class="top">
 					<div class="wrapper">
             <div style="height: 300px; width:700px; background-color: black;">
-              <ngx-charts-line-chart
+              <!-- Bar Chart View -->
+              <ngx-charts-bar-vertical-2d
+                *ngIf="showBarChart"
                 [scheme]="colorScheme"
                 [results]="data"
                 [xAxis]="true"
                 [yAxis]="true"
                 [legend]="true"
-                [customColors]="customColor"
+                [showXAxisLabel]="true"
+                [showYAxisLabel]="false"
+                [groupPadding]="4"
+                style="fill: white;"
+                xAxisLabel="Time"
+                yAxisLabel="Number of Entries">
+              </ngx-charts-bar-vertical-2d>
+
+              <!-- Line Chart View -->
+              <ngx-charts-line-chart
+                *ngIf="!showBarChart"
+                [scheme]="colorScheme"
+                [results]="data"
+                [xAxis]="true"
+                [yAxis]="true"
+                [legend]="true"
                 [showXAxisLabel]="true"
                 [showYAxisLabel]="false"
                 style="fill: white;"
