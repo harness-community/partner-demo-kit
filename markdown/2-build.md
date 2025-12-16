@@ -173,21 +173,32 @@ If you do not wish to use Harness Cloud, you can use your local Kubernetes clust
 
 > **Expression Syntax**: `<+pipeline.sequenceId>` is a Harness expression that provides the pipeline execution number. This ensures each build creates a uniquely tagged Docker image.
 
-## Step 7: (Optional) Enable Cache Intelligence
+## Step 7: (Optional) Enable Cache Intelligence and Build Intelligence
 
-If you're using **Harness Cloud** for builds, you can enable Cache Intelligence to speed up subsequent builds:
+If you're using **Harness Cloud** for builds, you can enable both Cache Intelligence and Build Intelligence to speed up subsequent builds:
 
-1. Return to the **Build** stage **Infrastructure** tab
-2. In the Harness Cloud configuration, expand **Advanced**
+1. Return to the **Build** stage **Overview** tab
+2. Scroll down to the **Cache Intelligence** section
 3. Toggle **Enable Cache Intelligence** to ON
-4. Click **Apply Changes**
+4. Scroll down to the **Build Intelligence** section
+5. Toggle **Enable Build Intelligence** to ON
+6. Click **Continue**
+
+![](images/2025-12-16_13-43-00.jpg)
 
 > **What is Cache Intelligence?**
-> Cache Intelligence automatically caches build dependencies and artifacts between pipeline runs:
+> Cache Intelligence automatically caches common dependencies to improve build times:
 > - Speeds up builds by 40-60% on average
 > - No configuration required - works automatically
-> - Caches Docker layers, package manager dependencies, and build artifacts
-> - Only available with Harness Cloud
+> - Caches package manager dependencies (npm, pip, maven, etc.)
+> - Available with Harness Cloud
+>
+> **What is Build Intelligence?**
+> Build Intelligence automatically caches build outputs to improve build time:
+> - Caches compiled artifacts and build outputs between runs
+> - Reduces redundant compilation and processing
+> - Currently supported on both Cloud and Kubernetes build infrastructure
+> - Works seamlessly with Cache Intelligence for maximum performance
 
 ## Step 8: Save and Run the Pipeline
 
@@ -224,14 +235,47 @@ Watch the pipeline execute:
 
 ## Build Infrastructure Comparison
 
-| Feature | Harness Cloud | Kubernetes |
-|---------|---------------|------------|
-| Setup Required | None | Minimal (connector) |
-| Account Requirements | Verified account | Any account |
-| Performance | Fastest (bare-metal) | Depends on cluster |
-| Scaling | Automatic | Manual/cluster-dependent |
-| Cache Intelligence | ✅ Yes | ❌ No |
-| Cost | Pay-as-you-go | Use existing infrastructure |
+<table style="width:100%; border-collapse: collapse; border: 2px solid #555;">
+  <thead>
+    <tr style="background-color: #2a2a2a; border-bottom: 3px solid #666;">
+      <th style="padding: 12px; text-align: left; border: 1px solid #555; font-weight: bold;">Feature</th>
+      <th style="padding: 12px; text-align: left; border: 1px solid #555; font-weight: bold;">Harness Cloud</th>
+      <th style="padding: 12px; text-align: left; border: 1px solid #555; font-weight: bold;">Kubernetes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="border-bottom: 1px solid #555;">
+      <td style="padding: 12px; border: 1px solid #555;"><strong>Setup Required</strong></td>
+      <td style="padding: 12px; border: 1px solid #555;">None</td>
+      <td style="padding: 12px; border: 1px solid #555;">Minimal (connector)</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #555;">
+      <td style="padding: 12px; border: 1px solid #555;"><strong>Account Requirements</strong></td>
+      <td style="padding: 12px; border: 1px solid #555;">Verified account</td>
+      <td style="padding: 12px; border: 1px solid #555;">Any account</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #555;">
+      <td style="padding: 12px; border: 1px solid #555;"><strong>Performance</strong></td>
+      <td style="padding: 12px; border: 1px solid #555;">Fastest (bare-metal)</td>
+      <td style="padding: 12px; border: 1px solid #555;">Depends on cluster</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #555;">
+      <td style="padding: 12px; border: 1px solid #555;"><strong>Scaling</strong></td>
+      <td style="padding: 12px; border: 1px solid #555;">Automatic</td>
+      <td style="padding: 12px; border: 1px solid #555;">Manual/cluster-dependent</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #555;">
+      <td style="padding: 12px; border: 1px solid #555;"><strong>Cache Intelligence</strong></td>
+      <td style="padding: 12px; border: 1px solid #555;">✅ Yes</td>
+      <td style="padding: 12px; border: 1px solid #555;">❌ No</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #555;">
+      <td style="padding: 12px; border: 1px solid #555;"><strong>Cost</strong></td>
+      <td style="padding: 12px; border: 1px solid #555;">Pay-as-you-go</td>
+      <td style="padding: 12px; border: 1px solid #555;">Use existing infrastructure</td>
+    </tr>
+  </tbody>
+</table>
 
 ## Pipeline Configuration Summary
 
