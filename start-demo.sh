@@ -5,9 +5,12 @@
 # This script sets up and starts all local infrastructure needed for the demo:
 # - Kubernetes cluster (minikube or Rancher Desktop)
 # - Prometheus monitoring
-# - Backend Docker image build and push
+# - Docker image builds (backend, test, docs) with automatic architecture detection
+#   * Detects Apple Silicon (ARM64) and builds for amd64 (Harness Cloud compatibility)
+#   * Intel/AMD builds natively without platform override
+# - Harness resource provisioning via Terraform
 #
-# Usage: ./start-demo.sh [--skip-docker-build]
+# Usage: ./start-demo.sh [--skip-docker-build] [--skip-terraform]
 #
 
 set -e  # Exit on error
@@ -400,37 +403,94 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
     fi
   fi
 
+  # Detect architecture
+  ARCH=$(uname -m)
+  BUILD_PLATFORM=""
+
+  if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
+    print_info "Detected Apple Silicon (ARM64) - building for amd64 (Harness Cloud compatibility)"
+    BUILD_PLATFORM="linux/amd64"
+    BUILD_CMD="docker buildx build --platform $BUILD_PLATFORM"
+    PUSH_FLAG="--push"
+  else
+    print_info "Detected Intel/AMD architecture - building natively"
+    BUILD_CMD="docker build"
+    PUSH_FLAG=""
+  fi
+
   # Build backend image
   print_info "Building backend Docker image (this may take a few minutes)..."
   cd backend
-  if docker build -t "$DOCKER_USERNAME/harness-demo:backend-latest" . --quiet; then
-    print_status "Backend image built: $DOCKER_USERNAME/harness-demo:backend-latest"
+  if [ -n "$PUSH_FLAG" ]; then
+    # Use buildx with --push for ARM64
+    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:backend-latest" $PUSH_FLAG . --quiet; then
+      print_status "Backend image built and pushed: $DOCKER_USERNAME/harness-demo:backend-latest"
+    else
+      print_error "Docker buildx failed"
+      cd ..
+      exit 1
+    fi
   else
-    print_error "Docker build failed"
-    cd ..
-    exit 1
-  fi
+    # Regular build for Intel/AMD
+    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:backend-latest" . --quiet; then
+      print_status "Backend image built: $DOCKER_USERNAME/harness-demo:backend-latest"
 
-  # Push backend image
-  print_info "Pushing backend image to Docker Hub..."
-  if docker push "$DOCKER_USERNAME/harness-demo:backend-latest" --quiet; then
-    print_status "Backend image pushed to Docker Hub"
+      # Push backend image separately for Intel/AMD
+      print_info "Pushing backend image to Docker Hub..."
+      if docker push "$DOCKER_USERNAME/harness-demo:backend-latest" --quiet; then
+        print_status "Backend image pushed to Docker Hub"
+      else
+        print_error "Docker push failed"
+        echo ""
+        echo "Common causes:"
+        echo "  1. Repository doesn't exist - Create 'harness-demo' at https://hub.docker.com/repository/create"
+        echo "  2. Authentication failed - Your credentials may be invalid"
+        echo "  3. No push access - Check repository permissions"
+        echo ""
+        echo "To fix:"
+        echo "  • Go to https://hub.docker.com/repository/create"
+        echo "  • Create a repository named: harness-demo"
+        echo "  • Make it public or private (your choice)"
+        echo "  • Then re-run: ./start-demo.sh"
+        echo ""
+        cd ..
+        exit 1
+      fi
+    else
+      print_error "Docker build failed"
+      cd ..
+      exit 1
+    fi
+  fi
+  cd ..
+
+  # Build test image for Test Intelligence
+  print_info "Building test Docker image for Harness Test Intelligence..."
+  cd python-tests
+  if [ -n "$PUSH_FLAG" ]; then
+    # Use buildx with --push for ARM64
+    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:test-latest" $PUSH_FLAG . --quiet; then
+      print_status "Test image built and pushed: $DOCKER_USERNAME/harness-demo:test-latest"
+    else
+      print_error "Test image buildx failed"
+      cd ..
+      exit 1
+    fi
   else
-    print_error "Docker push failed"
-    echo ""
-    echo "Common causes:"
-    echo "  1. Repository doesn't exist - Create 'harness-demo' at https://hub.docker.com/repository/create"
-    echo "  2. Authentication failed - Your credentials may be invalid"
-    echo "  3. No push access - Check repository permissions"
-    echo ""
-    echo "To fix:"
-    echo "  • Go to https://hub.docker.com/repository/create"
-    echo "  • Create a repository named: harness-demo"
-    echo "  • Make it public or private (your choice)"
-    echo "  • Then re-run: ./start-demo.sh"
-    echo ""
-    cd ..
-    exit 1
+    # Regular build for Intel/AMD
+    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:test-latest" . --quiet; then
+      print_status "Test image built: $DOCKER_USERNAME/harness-demo:test-latest"
+
+      # Push test image
+      print_info "Pushing test image to Docker Hub..."
+      if docker push "$DOCKER_USERNAME/harness-demo:test-latest" --quiet; then
+        print_status "Test image pushed to Docker Hub"
+      else
+        print_error "Test image push failed (this is not critical, continuing...)"
+      fi
+    else
+      print_error "Test image build failed (this is not critical, continuing...)"
+    fi
   fi
   cd ..
 
@@ -443,20 +503,28 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
   fi
 
   cd markdown
-  if docker build -t "$DOCKER_USERNAME/harness-demo:docs-latest" . --quiet; then
-    print_status "Documentation image built: $DOCKER_USERNAME/harness-demo:docs-latest"
+  if [ -n "$PUSH_FLAG" ]; then
+    # Use buildx with --push for ARM64
+    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:docs-latest" $PUSH_FLAG . --quiet; then
+      print_status "Documentation image built and pushed: $DOCKER_USERNAME/harness-demo:docs-latest"
+    else
+      print_error "Documentation buildx failed (this is not critical, continuing...)"
+    fi
   else
-    print_error "Documentation Docker build failed"
-    cd ..
-    exit 1
-  fi
+    # Regular build for Intel/AMD
+    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:docs-latest" . --quiet; then
+      print_status "Documentation image built: $DOCKER_USERNAME/harness-demo:docs-latest"
 
-  # Push documentation image
-  print_info "Pushing documentation image to Docker Hub..."
-  if docker push "$DOCKER_USERNAME/harness-demo:docs-latest" --quiet; then
-    print_status "Documentation image pushed to Docker Hub"
-  else
-    print_error "Documentation push failed (this is not critical, continuing...)"
+      # Push documentation image
+      print_info "Pushing documentation image to Docker Hub..."
+      if docker push "$DOCKER_USERNAME/harness-demo:docs-latest" --quiet; then
+        print_status "Documentation image pushed to Docker Hub"
+      else
+        print_error "Documentation push failed (this is not critical, continuing...)"
+      fi
+    else
+      print_error "Documentation Docker build failed (this is not critical, continuing...)"
+    fi
   fi
   cd ..
 

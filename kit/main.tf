@@ -158,7 +158,9 @@ template:
           defaultSDKKey: "'"<+variable.sdk>"'"
         };" > ./src/environments/environment.ts
 
-        npm run build
+        # Force single-threaded build to avoid esbuild deadlock on ARM64
+        node --version
+        ng build --configuration production
   EOT
 
   depends_on = [

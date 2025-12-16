@@ -15,11 +15,16 @@ All demo resources are created in a Harness project called **"Base Demo"** to ke
 ## What This Demo Showcases
 
 1. **Code Repository Secret Scanning** - Block sensitive data from being committed
-2. **CI Pipeline with Test Intelligence** - Automated testing and Docker image builds
-3. **Continuous Deployment** - Rolling and canary deployment strategies
+2. **CI Pipeline with Test Intelligence** - Automated testing and Docker image builds (**Harness Cloud**)
+3. **Continuous Deployment** - Rolling and canary deployment strategies (local Kubernetes)
 4. **Continuous Verification** - Automated deployment validation using Prometheus metrics
 5. **Security Testing** - Available with licensed partner organization
 6. **Policy Enforcement (OPA)** - Available with licensed partner organization
+
+## Infrastructure Requirements
+
+- **CI Builds**: Harness Cloud (requires credit card for account verification - free tier available)
+- **CD Deployments**: Local Kubernetes (Rancher Desktop or minikube)
 
 ## Prerequisites
 
@@ -38,6 +43,8 @@ All demo resources are created in a Harness project called **"Base Demo"** to ke
 ### Required Accounts
 - **Harness Account**: Sign up at [app.harness.io](https://app.harness.io)
   - Enable modules: CI (Continuous Integration), CD (Continuous Delivery), Code Repository
+  - **Important**: Harness Cloud requires credit card verification (free tier available)
+  - Add credit card in Account Settings > Billing to enable Harness Cloud for CI builds
 - **Docker Hub Account**: Sign up at [hub.docker.com](https://hub.docker.com)
   - Create a repository named `harness-demo`
   - Generate a Personal Access Token (Settings > Security > Personal Access Tokens)
@@ -267,24 +274,55 @@ ngrok http 9090
 # You'll use this URL in the Terraform configuration later
 ```
 
-### Step 4: Build and Push Backend Docker Image
+### Step 4: Build and Push Docker Images
+
+> **✅ Automated**: The [start-demo.sh](start-demo.sh) script automatically detects your architecture (Intel/AMD vs Apple Silicon) and builds all images with the correct platform settings. You can skip this step if using the automated script.
+
+> **⚠️ Manual Builds**: If building manually, Harness Cloud runs on amd64 architecture. Apple Silicon users (M1/M2/M3/M4) must use `docker buildx build --platform linux/amd64`.
+
+#### Backend Application Image
 
 ```bash
 # Navigate to backend directory
-cd ../backend
+cd backend
 
 # Build the Docker image
 # Replace "dockerhubaccountid" with YOUR Docker Hub username
+
+# For Intel/AMD Macs and PCs:
 docker build -t dockerhubaccountid/harness-demo:backend-latest .
 
-# Login to Docker Hub
-docker login -u dockerhubaccountid
+# For Apple Silicon Macs (M1/M2/M3/M4):
+docker buildx build --platform linux/amd64 -t dockerhubaccountid/harness-demo:backend-latest --push .
 
-# Push the image
+# If not using buildx --push flag, login and push separately:
+docker login -u dockerhubaccountid
 docker push dockerhubaccountid/harness-demo:backend-latest
 ```
 
-**Important**: Remember to replace `dockerhubaccountid` throughout the repository with your actual Docker Hub username.
+#### Test Image (for CI Pipeline)
+
+```bash
+# Navigate to python-tests directory
+cd python-tests
+
+# For Intel/AMD Macs and PCs:
+docker build -t dockerhubaccountid/harness-demo:test-latest .
+docker push dockerhubaccountid/harness-demo:test-latest
+
+# For Apple Silicon Macs (M1/M2/M3/M4):
+docker buildx build --platform linux/amd64 -t dockerhubaccountid/harness-demo:test-latest --push .
+```
+
+**Important Docker Image Tags:**
+- `backend-latest` - Django backend application (production runtime)
+- `test-latest` - Python + pytest environment (CI testing only)
+- `demo-base-<tag>` - Frontend Angular application
+
+**Critical**: Remember to replace `dockerhubaccountid` in:
+1. The Docker build/push commands above
+2. [kit/main.tf](kit/main.tf) line ~300: `imagePath: dockerhubaccountid/harness-demo`
+3. Your Harness pipeline's Test Intelligence step to use `test-latest` image
 
 ### Step 5: Configure Harness Account
 
@@ -451,6 +489,42 @@ Follow the step-by-step lab guides in the `markdown/` directory which walk throu
 
 **Issue**: Docker image push fails
 - **Solution**: Verify you're logged in to Docker Hub: `docker login -u your-username`
+
+**Issue**: Image pull error: "pull access denied for harness-demo"
+- **Cause**: The placeholder `dockerhubaccountid` was not replaced with your actual Docker Hub username
+- **Solution**:
+  1. Update [kit/main.tf](kit/main.tf) line ~300 to use your Docker Hub username: `imagePath: YOUR-USERNAME/harness-demo`
+  2. In Harness UI, verify the service artifact configuration shows `YOUR-USERNAME/harness-demo:backend-latest`
+  3. Re-run the deployment pipeline
+
+**Issue**: Test Intelligence step fails with "pytest: not found"
+- **Cause**: The Test Intelligence step is not using the correct container image
+- **Solution**:
+  1. Build and push the test image (see architecture notes above for Apple Silicon):
+     ```bash
+     cd python-tests
+     # Apple Silicon: docker buildx build --platform linux/amd64 -t YOUR-USERNAME/harness-demo:test-latest --push .
+     # Intel/AMD: docker build -t YOUR-USERNAME/harness-demo:test-latest . && docker push YOUR-USERNAME/harness-demo:test-latest
+     ```
+  2. In Harness pipeline, update Test Intelligence step to use image: `YOUR-USERNAME/harness-demo:test-latest`
+  3. Do NOT use `backend-latest` for testing - use `test-latest`
+
+**Issue**: Test Intelligence fails with "exec /usr/bin/sh: exec format error"
+- **Cause**: Docker image was built for wrong architecture (ARM64 instead of amd64)
+- **Affects**: Apple Silicon Macs building images for Harness Cloud
+- **Solution**: Rebuild the image with `--platform linux/amd64`:
+  ```bash
+  cd python-tests
+  docker buildx build --platform linux/amd64 -t YOUR-USERNAME/harness-demo:test-latest --push .
+  ```
+
+**Issue**: Pipeline setup or build infrastructure questions
+- **Solution**: The demo uses **Harness Cloud for CI builds** (test and compile steps)
+- Requires: Harness account with credit card verification (free tier available)
+- In pipeline infrastructure, select:
+  - Platform: "Harness Cloud"
+  - OS: "Linux"
+  - Architecture: "Amd64"
 
 **Issue**: Harness delegate not connecting
 - **Solution**: Check delegate pod status: `kubectl get pods -n harness-delegate-ng`

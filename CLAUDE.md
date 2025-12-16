@@ -56,21 +56,44 @@ pytest                 # Run all tests
 ```
 
 ### Docker Images
-Both applications are containerized. Replace `dockerhubaccountid` with your Docker Hub account:
+The repository uses three Docker images. Replace `dockerhubaccountid` with your Docker Hub account:
 
-**Backend**:
+**✅ Automated**: The [start-demo.sh](start-demo.sh) script automatically detects your architecture and builds backend and test images with correct platform settings. Manual builds are only needed if:
+- Running the script with `--skip-docker-build`
+- Rebuilding images after code changes
+- Building the frontend image locally
+
+**⚠️ Apple Silicon Users**: When building manually, you must use `--platform linux/amd64` because Harness Cloud runs on amd64 architecture.
+
+**Backend Application** (Django runtime):
 ```bash
 cd backend
-docker build -t dockerhubaccountid/harness-demo:backend-latest .
-docker push dockerhubaccountid/harness-demo:backend-latest
+# Intel/AMD: docker build -t dockerhubaccountid/harness-demo:backend-latest .
+# Apple Silicon:
+docker buildx build --platform linux/amd64 -t dockerhubaccountid/harness-demo:backend-latest --push .
 ```
 
-**Frontend**:
+**Test Image** (CI pipeline with pytest pre-installed):
+```bash
+cd python-tests
+# Intel/AMD: docker build -t dockerhubaccountid/harness-demo:test-latest . && docker push dockerhubaccountid/harness-demo:test-latest
+# Apple Silicon:
+docker buildx build --platform linux/amd64 -t dockerhubaccountid/harness-demo:test-latest --push .
+```
+
+**Frontend Application** (Angular - built in CI, not locally):
 ```bash
 cd frontend-app/harness-webapp
-docker build -t dockerhubaccountid/harness-demo:demo-base-<tag> .
-docker push dockerhubaccountid/harness-demo:demo-base-<tag>
+# Only needed if building locally for testing
+docker buildx build --platform linux/amd64 -t dockerhubaccountid/harness-demo:demo-base-<tag> --push .
 ```
+
+**Image Tag Reference:**
+- `backend-latest` - Django backend application (production)
+- `test-latest` - Python + pytest environment (CI only)
+- `demo-base-<tag>` - Frontend Angular application
+
+**Architecture Note**: All images must be amd64 for Harness Cloud compatibility. The start-demo.sh script handles this automatically. Manual builds on Apple Silicon require `docker buildx build --platform linux/amd64`.
 
 ## Infrastructure Commands
 
@@ -97,7 +120,10 @@ chmod +x start-demo.sh stop-demo.sh
 3. **Creates Docker Hub secret** (`dockerhub-pull`) in Kubernetes for pulling Harness CI images
 4. Deploys Prometheus for continuous verification
 5. Authenticates to Docker Hub (smart detection of existing login)
-6. Builds and pushes backend and documentation Docker images
+6. **Detects architecture** (Intel/AMD vs Apple Silicon) and builds Docker images with correct platform:
+   - Backend image (backend-latest)
+   - Test image (test-latest)
+   - Documentation image (docs-latest)
 7. **Updates Docker Hub secret** with authenticated credentials after login
 8. **Collects Harness credentials** (Account ID, PAT, Docker password)
 9. **Updates kit/se-parms.tfvars** automatically
@@ -265,12 +291,17 @@ The complete demo workflow is documented in:
 
 The demo demonstrates (all within "Base Demo" project):
 1. **Code Repository Secret Scanning** - Demonstrates blocking sensitive commits (TOKEN in backend/entrypoint.sh)
-2. **CI Pipeline** - Build stage with test intelligence, compile template, and Docker image push
+2. **CI Pipeline** - Build stage with test intelligence, compile template, and Docker image push (uses **Harness Cloud** infrastructure)
 3. **Frontend Deployment** - Rolling deployment strategy to local K8s
 4. **Backend Deployment** - Canary deployment strategy to local K8s
 5. **Continuous Verification** - Uses Prometheus metrics to verify canary deployments (5-minute duration)
 6. **Security Scanning** - Requires licensed partner org (not available in free tier)
 7. **OPA Policy Enforcement** - Requires licensed partner org (not available in free tier)
+
+## Infrastructure Architecture
+
+- **CI Builds**: Use Harness Cloud (requires credit card verification, works on all platforms)
+- **CD Deployments**: Use local Kubernetes cluster (minikube or Rancher Desktop)
 
 ## Reset/Cleanup Procedure
 

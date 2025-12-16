@@ -42,16 +42,22 @@ This lab walks through creating a complete CI pipeline with test intelligence, c
 
 You have several options for build infrastructure. Choose the one that best fits your needs:
 
-### Option A: Harness Cloud (Recommended)
+### Option A: Harness Cloud (Recommended - Req'd if using an Apple Silicon based Mac)
 
-> **Important**: Harness Cloud is available for paid Harness accounts. If you're using a new or free-tier account, you will need to use Option B (Kubernetes) instead.
+> **Important**: Harness Cloud is available to use for free but you will need to verify yourself using a credit card.  You will not be charged for any use, it's simply a security measure to prevent abuse.
 
 1. On the **Infrastructure** tab
-2. Select **Harness Cloud**
-3. Choose the architecture that matches your development environment:
+2. Click on `Update Card`, enter your card details, agree to the terms of use, and then click `Set as Default Card` to proceed.
+
+![](images/2025-12-16_13-20-50.jpg)
+
+![](images/2025-12-16_13-21-16.jpg)
+
+1. Select **Harness Cloud**
+2. Choose the architecture that matches your development environment:
    - **arm64** - If using Apple Silicon (M1/M2/M3)
    - **amd64** - If using Intel processors
-4. Click **Continue**
+3. Click **Continue**
 
 **Benefits of Harness Cloud**:
 - Zero configuration required
@@ -60,7 +66,7 @@ You have several options for build infrastructure. Choose the one that best fits
 - No infrastructure management
 - Dramatically less expensive than on-premise solutions
 
-### Option B: Kubernetes Build Farm (Alternative)
+### Option B: Kubernetes Build Farm (Alternative - x86/Intel Only)
 
 If you do not wish to use Harness Cloud, you can use your local Kubernetes cluster:
 
@@ -85,12 +91,22 @@ If you do not wish to use Harness Cloud, you can use your local Kubernetes clust
 2. Select **Add Step** > **Test Intelligence**
 3. Configure:
    - **Name**: `Test Intelligence`
+   - **Container Registry**: `Workshop Docker`
+   - **Image**: `dockerhubaccountid/harness-demo:test-latest`
+     - ⚠️ Replace `dockerhubaccountid` with YOUR Docker Hub username
+     - ⚠️ Use `test-latest` tag (NOT `backend-latest`) - this image has pytest pre-installed
+   - **Language**: `Python`
+   - **Build Tool**: `Pytest`
    - **Command**:
      ```bash
      cd ./python-tests
      pytest
      ```
 4. Click **Apply Changes**
+
+> **Important**: The `test-latest` image is a lightweight Python container with pytest pre-installed specifically for CI testing. This is different from `backend-latest` which contains the Django application.
+
+![](images/2025-12-16_11-00-25.jpg)
 
 > **Understanding Test Intelligence**:
 >
