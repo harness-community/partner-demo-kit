@@ -213,68 +213,58 @@ fi
 
 if [ "$K8S_AVAILABLE" = true ]; then
 
-# Delete frontend deployment and service
-if kubectl get deployment frontend-deployment &> /dev/null; then
-  print_info "Deleting frontend deployment..."
-  kubectl delete deployment frontend-deployment --ignore-not-found=true
-  print_status "Frontend deployment deleted"
+# Delete all application deployments (including canary deployments created by pipeline)
+print_info "Checking for application deployments in default namespace..."
+ALL_DEPLOYMENTS=$(kubectl get deployments -n default --no-headers 2>/dev/null | grep -E "frontend|backend|docs" | awk '{print $1}')
+
+if [ -n "$ALL_DEPLOYMENTS" ]; then
+  print_info "Found deployments to delete:"
+  echo "$ALL_DEPLOYMENTS" | while read -r deployment; do
+    echo "  - $deployment"
+  done
+
+  echo "$ALL_DEPLOYMENTS" | while read -r deployment; do
+    print_info "Deleting deployment: $deployment"
+    kubectl delete deployment "$deployment" -n default --ignore-not-found=true
+  done
+  print_status "All application deployments deleted"
 else
-  print_info "Frontend deployment not found (already deleted)"
+  print_info "No application deployments found"
 fi
 
-if kubectl get service web-frontend-svc &> /dev/null; then
-  print_info "Deleting frontend service..."
-  kubectl delete service web-frontend-svc --ignore-not-found=true
-  print_status "Frontend service deleted"
-else
-  print_info "Frontend service not found (already deleted)"
-fi
+# Delete all application services (including those created by pipeline)
+print_info "Checking for application services in default namespace..."
+ALL_SERVICES=$(kubectl get services -n default --no-headers 2>/dev/null | grep -E "frontend|backend|docs" | awk '{print $1}')
 
-# Delete backend deployment and service
-if kubectl get deployment backend-deployment &> /dev/null; then
-  print_info "Deleting backend deployment..."
-  kubectl delete deployment backend-deployment --ignore-not-found=true
-  print_status "Backend deployment deleted"
-else
-  print_info "Backend deployment not found (already deleted)"
-fi
+if [ -n "$ALL_SERVICES" ]; then
+  print_info "Found services to delete:"
+  echo "$ALL_SERVICES" | while read -r service; do
+    echo "  - $service"
+  done
 
-if kubectl get service web-backend-svc &> /dev/null; then
-  print_info "Deleting backend service..."
-  kubectl delete service web-backend-svc --ignore-not-found=true
-  print_status "Backend service deleted"
+  echo "$ALL_SERVICES" | while read -r service; do
+    print_info "Deleting service: $service"
+    kubectl delete service "$service" -n default --ignore-not-found=true
+  done
+  print_status "All application services deleted"
 else
-  print_info "Backend service not found (already deleted)"
-fi
-
-# Delete documentation deployment and service
-if kubectl get deployment docs-deployment &> /dev/null; then
-  print_info "Deleting documentation deployment..."
-  kubectl delete deployment docs-deployment --ignore-not-found=true
-  print_status "Documentation deployment deleted"
-else
-  print_info "Documentation deployment not found (already deleted)"
-fi
-
-if kubectl get service docs-service &> /dev/null; then
-  print_info "Deleting documentation service..."
-  kubectl delete service docs-service --ignore-not-found=true
-  print_status "Documentation service deleted"
-else
-  print_info "Documentation service not found (already deleted)"
+  print_info "No application services found"
 fi
 
 # Delete any remaining pods and wait for full termination
-print_info "Checking for remaining application pods..."
-REMAINING_PODS=$(kubectl get pods --no-headers 2>/dev/null | grep -E "frontend|backend" | wc -l)
+print_info "Checking for remaining application pods in default namespace..."
+REMAINING_PODS=$(kubectl get pods -n default --no-headers 2>/dev/null | grep -E "frontend|backend|docs" | wc -l)
 if [ "$REMAINING_PODS" -gt 0 ]; then
   print_info "Waiting for $REMAINING_PODS pod(s) to fully terminate..."
 
-  # Wait up to 60 seconds for pods to terminate
+  # Show which pods are terminating
+  kubectl get pods -n default --no-headers 2>/dev/null | grep -E "frontend|backend|docs" | awk '{print "  - " $1 " (" $3 ")"}'
+
+  # Wait up to 90 seconds for pods to terminate (increased from 60 for canary cleanup)
   WAIT_TIME=0
-  MAX_WAIT=60
+  MAX_WAIT=90
   while [ $WAIT_TIME -lt $MAX_WAIT ]; do
-    REMAINING=$(kubectl get pods --no-headers 2>/dev/null | grep -E "frontend|backend" | wc -l)
+    REMAINING=$(kubectl get pods -n default --no-headers 2>/dev/null | grep -E "frontend|backend|docs" | wc -l)
     if [ "$REMAINING" -eq 0 ]; then
       break
     fi
@@ -282,11 +272,12 @@ if [ "$REMAINING_PODS" -gt 0 ]; then
     WAIT_TIME=$((WAIT_TIME + 2))
   done
 
-  FINAL_COUNT=$(kubectl get pods --no-headers 2>/dev/null | grep -E "frontend|backend" | wc -l)
+  FINAL_COUNT=$(kubectl get pods -n default --no-headers 2>/dev/null | grep -E "frontend|backend|docs" | wc -l)
   if [ "$FINAL_COUNT" -eq 0 ]; then
     print_status "All application pods terminated"
   else
     print_info "$FINAL_COUNT pod(s) still terminating (may take 1-2 full minutes)"
+    kubectl get pods -n default --no-headers 2>/dev/null | grep -E "frontend|backend|docs" | awk '{print "  - " $1 " (" $3 ")"}'
   fi
 else
   print_status "No application pods found"
@@ -342,9 +333,13 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
     echo "  - Connectors"
     echo "  - All other resources in the state file"
     echo ""
-    read -p "Are you sure you want to destroy these Harness resources? (yes/no): " CONFIRM_HARNESS
+    read -p "Are you sure you want to destroy these Harness resources? [Y/n]: " CONFIRM_HARNESS
 
-    if [ "$CONFIRM_HARNESS" = "yes" ]; then
+    # Default to yes if empty
+    CONFIRM_HARNESS=${CONFIRM_HARNESS:-yes}
+
+    # Accept y/Y/yes as confirmation
+    if [[ "$CONFIRM_HARNESS" =~ ^[Yy]([Ee][Ss])?$ ]]; then
       # Need Harness PAT for destroy
       if [ -z "$HARNESS_PAT" ]; then
         echo ""
@@ -393,21 +388,68 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
           print_info "Running terraform destroy (this may take 2-3 minutes)..."
 
           cd kit
+          TERRAFORM_SUCCESS=false
           if terraform destroy -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -auto-approve; then
-            print_status "Harness resources destroyed successfully"
+            print_status "Harness resources destroyed successfully via Terraform"
+            TERRAFORM_SUCCESS=true
           else
             print_error "Terraform destroy encountered errors"
             print_info "Some resources may have been deleted. Check kit/terraform.tfstate"
             print_info ""
-            print_info "Common issues:"
-            print_info "  • Pipeline still exists - Delete it manually in Harness UI"
-            print_info "  • Active service instances - Wait for all pods to terminate"
-            print_info "  • Resources referenced elsewhere - Check Harness UI for dependencies"
-            print_info ""
-            print_info "After fixing issues, you can retry terraform destroy:"
-            print_info "  cd kit && terraform destroy -var=\"pat=\$DEMO_BASE_PAT\" -var-file=\"se-parms.tfvars\""
+
+            # Offer to delete the entire project via API as fallback
+            echo ""
+            echo -e "${YELLOW}Terraform couldn't delete all resources due to dependencies.${NC}"
+            echo -e "${YELLOW}Would you like to delete the entire 'Base Demo' project via Harness API?${NC}"
+            echo "This will forcefully delete the project and all its resources."
+            echo ""
+            read -p "Delete 'Base Demo' project via API? [Y/n]: " DELETE_PROJECT_API
+
+            # Default to yes if empty
+            DELETE_PROJECT_API=${DELETE_PROJECT_API:-yes}
+
+            # Accept y/Y/yes as confirmation
+            if [[ "$DELETE_PROJECT_API" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+              print_section "Deleting Project via Harness API"
+
+              # Delete the entire Base Demo project
+              PROJECT_DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
+                "https://app.harness.io/ng/api/projects/Base_Demo?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default" \
+                -H "x-api-key: ${HARNESS_PAT}" 2>/dev/null)
+
+              PROJECT_HTTP_CODE=$(echo "$PROJECT_DELETE_RESPONSE" | tail -n 1)
+
+              if [ "$PROJECT_HTTP_CODE" = "200" ] || [ "$PROJECT_HTTP_CODE" = "204" ]; then
+                print_status "Base Demo project deleted successfully via API"
+                TERRAFORM_SUCCESS=true
+              elif [ "$PROJECT_HTTP_CODE" = "404" ]; then
+                print_info "Project not found (may already be deleted)"
+                TERRAFORM_SUCCESS=true
+              else
+                print_error "Failed to delete project via API (HTTP $PROJECT_HTTP_CODE)"
+                print_info "You may need to manually delete the project in Harness UI"
+              fi
+            else
+              print_info "Skipping API deletion"
+              print_info ""
+              print_info "To retry terraform destroy:"
+              print_info "  cd kit && terraform destroy -var=\"pat=\$DEMO_BASE_PAT\" -var-file=\"se-parms.tfvars\""
+              print_info ""
+              print_info "Or delete manually in Harness UI:"
+              print_info "  Navigate to Projects > Base Demo > ⋮ > Delete Project"
+            fi
           fi
           cd ..
+
+          # Clean up terraform state files if deletion was successful
+          if [ "$TERRAFORM_SUCCESS" = true ]; then
+            print_info "Cleaning up Terraform state files..."
+            if [ -f "kit/terraform.tfstate" ]; then
+              rm -f kit/terraform.tfstate
+              rm -f kit/terraform.tfstate.backup
+              print_status "Terraform state files removed"
+            fi
+          fi
         fi
       fi
     else
@@ -446,9 +488,13 @@ if [ "$DELETE_DOCKER_REPO" = true ]; then
     echo "  Repository: $DOCKER_USERNAME/harness-demo"
     echo "  All images and tags will be deleted"
     echo ""
-    read -p "Are you sure you want to delete this Docker Hub repository? (yes/no): " CONFIRM_DOCKER
+    read -p "Are you sure you want to delete this Docker Hub repository? [Y/n]: " CONFIRM_DOCKER
 
-    if [ "$CONFIRM_DOCKER" = "yes" ]; then
+    # Default to yes if empty
+    CONFIRM_DOCKER=${CONFIRM_DOCKER:-yes}
+
+    # Accept y/Y/yes as confirmation
+    if [[ "$CONFIRM_DOCKER" =~ ^[Yy]([Ee][Ss])?$ ]]; then
       print_info "Deleting Docker Hub repository '$DOCKER_USERNAME/harness-demo'..."
 
       # First, get a JWT token from Docker Hub
@@ -499,9 +545,13 @@ if [ "$DELETE_CONFIG_FILES" = true ]; then
   echo ""
   echo "After deletion, you will need to re-enter credentials on next run."
   echo ""
-  read -p "Are you sure you want to delete these files? (yes/no): " CONFIRM_CONFIG
+  read -p "Are you sure you want to delete these files? [Y/n]: " CONFIRM_CONFIG
 
-  if [ "$CONFIRM_CONFIG" = "yes" ]; then
+  # Default to yes if empty
+  CONFIRM_CONFIG=${CONFIRM_CONFIG:-yes}
+
+  # Accept y/Y/yes as confirmation
+  if [[ "$CONFIRM_CONFIG" =~ ^[Yy]([Ee][Ss])?$ ]]; then
     FILES_DELETED=false
 
     if [ -f ".demo-config" ]; then
