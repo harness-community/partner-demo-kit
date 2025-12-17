@@ -3,13 +3,6 @@
 
 > **Lab Type**: ADVANCED LAB - Requires licensed partner organization
 
-<style type="text/css" rel="stylesheet">
-hr.cyan { background-color: cyan; color: cyan; height: 2px; margin-bottom: -10px; }
-h2.cyan { color: cyan; }
-</style><h2 class="cyan">Guardrails through OPA Policy</h2>
-<hr class="cyan">
-<br><br>
-
 # Now let's configure a policy
 - Click on **Project Settings** in the left Nav
 - Then scroll down to **Security and Governance** and click **Policies**
