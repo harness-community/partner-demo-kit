@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 # Install pytest and any other test dependencies
 # This creates a lightweight test image for CI pipelines
-RUN pip install --no-cache-dir pytest>=7.4.0
+RUN pip install pytest pytest-html pytest-cov
 
 # Set working directory to match Harness CI workspace
 WORKDIR /harness

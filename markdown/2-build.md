@@ -42,9 +42,11 @@ This lab walks through creating a complete CI pipeline with test intelligence, c
 
 You have several options for build infrastructure. Choose the one that best fits your needs:
 
-### Option A: Harness Cloud (Recommended - Req'd if using an Apple Silicon based Mac)
+### Option A: Harness Cloud (Recommended)
 
 > **Important**: Harness Cloud is available to use for free but you will need to verify yourself using a credit card.  You will not be charged for any use, it's simply a security measure to prevent abuse.
+
+The following will only need to be done once:
 
 1. On the **Infrastructure** tab
 2. Click on `Update Card`, enter your card details, agree to the terms of use, and then click `Set as Default Card` to proceed.
@@ -54,10 +56,7 @@ You have several options for build infrastructure. Choose the one that best fits
 ![](images/2025-12-16_13-21-16.jpg)
 
 1. Select **Harness Cloud**
-2. Choose the architecture that matches your development environment:
-   - **arm64** - If using Apple Silicon (M1/M2/M3)
-   - **amd64** - If using Intel processors
-3. Click **Continue**
+2. Click **Continue**
 
 **Benefits of Harness Cloud**:
 - Zero configuration required
@@ -85,22 +84,21 @@ If you do not wish to use Harness Cloud, you can use your local Kubernetes clust
 
 > **Note**: For this demo, either option will work. Harness Cloud provides a better experience but requires account verification.
 
-## Step 4: Add Test Intelligence Step
+## Step 4: Add Run Tests Step
 
 1. On the **Execution** tab, click **+ Add Step**
-2. Select **Add Step** > **Test Intelligence**
+2. Select **Add Step** > **Run**
 3. Configure:
    - **Name**: `Test Intelligence`
    - **Container Registry**: `Workshop Docker`
    - **Image**: `dockerhubaccountid/harness-demo:test-latest`
      - ⚠️ Replace `dockerhubaccountid` with YOUR Docker Hub username
      - ⚠️ Use `test-latest` tag (NOT `backend-latest`) - this image has pytest pre-installed
-   - **Language**: `Python`
-   - **Build Tool**: `Pytest`
    - **Command**:
      ```bash
+     mkdir -p reports
      cd ./python-tests
-     pytest
+     pytest --junitxml=reports/junit.xml --html=reports/report.html --cov=. --cov-report=xml:reports/coverage.xml
      ```
 4. Click **Apply Changes**
 
@@ -142,9 +140,10 @@ If you do not wish to use Harness Cloud, you can use your local Kubernetes clust
 1. Click **+ Add Step**
 2. Select **Use Template**
 3. Select the **"Compile Application"** template (created by Terraform)
-4. Configure:
+4. Select **Use Template**
+5. Configure:
    - **Name**: `Compile`
-5. Click **Apply Changes**
+6. Click **Apply Changes**
 
 > **About Templates**:
 > This step uses a pre-configured template created by Terraform. Templates allow platform teams to standardize build processes across the organization, ensuring consistency and best practices.
@@ -160,12 +159,13 @@ If you do not wish to use Harness Cloud, you can use your local Kubernetes clust
 2. Select **Add Step** > **Build and Push an image to Docker Registry**
 3. Configure:
    - **Name**: `Push to Dockerhub`
-   - **Docker Connector**: `workshop-docker` (created by Terraform)
+   - **Docker Connector**: `Workshop Docker` (created by Terraform)
    - **Docker Repository**: `dockerhubaccountid/harness-demo`
      - ⚠️ Replace `dockerhubaccountid` with YOUR Docker Hub username
    - **Tags**: Click **+ Add**
      - Add: `demo-base-<+pipeline.sequenceId>`
      - Change field type to **Expression** using the icon
+   - **Enable Docker Layer Caching**: Check this box
    - **Optional Configuration** (expand):
      - **Dockerfile**: `/harness/frontend-app/harness-webapp/Dockerfile`
      - **Context**: `/harness/frontend-app/harness-webapp`
@@ -282,7 +282,7 @@ Watch the pipeline execute:
 Your pipeline now has these components:
 - **Build** stage with:
   - Infrastructure: Harness Cloud or Kubernetes
-  - Test Intelligence (pytest)
+  - Run Tests (pytest)
   - Compile Application (Angular build via template)
   - Docker Build & Push (to Docker Hub)
   - Cache Intelligence (optional, Harness Cloud only)
