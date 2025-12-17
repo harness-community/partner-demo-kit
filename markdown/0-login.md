@@ -79,6 +79,29 @@ The automated setup configured your complete demo environment:
 4. **Provisioned Harness Resources** - Used Terraform to create the "Base Demo" project with all connectors, environments, services, pipelines, and monitored services
 5. **Saved Your Configuration** - Stored credentials in `.demo-config` for subsequent runs
 
+## Access the Demo Documentation
+
+The setup script deployed this documentation to your local Kubernetes cluster for easy access during the demo:
+
+1. **Open the documentation** in your browser:
+   ```
+   http://localhost:30001
+   ```
+
+2. **Set up side-by-side viewing** for the best demo experience:
+
+   **Option A: Two Browser Windows**
+   - Open the documentation in one browser window: `http://localhost:30001`
+   - Open Harness in another window: `https://app.harness.io`
+   - Arrange them side-by-side on your screen
+
+   **Option B: Chrome Split-View Tabs** (Chrome 135+)
+   - Open both URLs in Chrome tabs
+   - Right-click on either tab and select **"Move tab to new window with side-by-side"**
+   - This creates a split-view within a single Chrome window for convenient navigation
+
+> **Tip**: Having the documentation and Harness UI visible simultaneously makes it much easier to follow along with the labs step-by-step.
+
 ## Access Your Harness Account
 
 Now that setup is complete, access your Harness account to verify resources:
