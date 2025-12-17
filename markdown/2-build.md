@@ -1,6 +1,6 @@
 # Lab 2: CI Pipeline with Test Intelligence
 
-> **Important**: All activities in the **"Base Demo"** project
+> **Lab Type**: BASE DEMO - Available with free Harness account
 
 ## Overview
 This lab walks through creating a complete CI pipeline with test intelligence, compilation, and Docker image building. You'll configure build infrastructure and see how Harness optimizes your CI/CD workflows.

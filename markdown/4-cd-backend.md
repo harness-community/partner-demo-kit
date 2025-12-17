@@ -1,6 +1,6 @@
 # Lab 4: Continuous Deployment - Backend (Canary)
 
-> **Important**: All activities in the **"Base Demo"** project
+> **Lab Type**: BASE DEMO - Available with free Harness account
 
 ## Overview
 This lab adds backend deployment using a Canary deployment strategy. Unlike the frontend's rolling deployment, canary deployments gradually shift traffic to new versions while monitoring for issues.

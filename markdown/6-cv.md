@@ -1,6 +1,6 @@
 # Lab 6: Continuous Verification
 
-> **Important**: All activities in the **"Base Demo"** project
+> **Lab Type**: BASE DEMO - Available with free Harness account
 
 ## Overview
 This lab adds Continuous Verification (CV) to your backend canary deployment. Harness CV uses machine learning to analyze metrics from Prometheus and automatically detect anomalies during deployment, enabling automated rollback if issues are detected.

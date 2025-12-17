@@ -1,6 +1,6 @@
 # Lab 1: Code Repository Secret Scanning
 
-> **Important**: All demo activities take place in the **"Base Demo"** project in Harness
+> **Lab Type**: BASE DEMO - Available with free Harness account
 
 ## Overview
 This lab demonstrates Harness Code Repository's secret scanning feature, which prevents sensitive data (like API tokens, passwords, and keys) from being committed to your repository.

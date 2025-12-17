@@ -1,4 +1,8 @@
 
+# Lab 7: OPA Policy Enforcement
+
+> **Lab Type**: ADVANCED LAB - Requires licensed partner organization
+
 <style type="text/css" rel="stylesheet">
 hr.cyan { background-color: cyan; color: cyan; height: 2px; margin-bottom: -10px; }
 h2.cyan { color: cyan; }

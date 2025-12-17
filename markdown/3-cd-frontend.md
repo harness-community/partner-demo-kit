@@ -1,6 +1,6 @@
 # Lab 3: Continuous Deployment - Frontend
 
-> **Important**: All activities in the **"Base Demo"** project
+> **Lab Type**: BASE DEMO - Available with free Harness account
 
 ## Overview
 This lab extends your CI pipeline with a deployment stage for the frontend application. You'll deploy to your local Kubernetes cluster (minikube or Rancher Desktop) using a rolling deployment strategy.

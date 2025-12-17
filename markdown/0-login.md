@@ -1,24 +1,24 @@
 # Lab 0: Getting Started
 
-> **Important**: All activities in the **"Base Demo"** project
+> **Lab Type**: BASE DEMO - Available with free Harness account
 
 ## About This Partner Demo Kit
 
-This is the **Base Partner Demo Kit** - one of two comprehensive demo kits available for Harness partners:
+This **Partner Demo Kit** includes two parts: 
 
-1. **Base Partner Demo Kit** (this kit) - Covers core Harness capabilities:
+1. **Base Demo** (Labs 1-4, 6) - Covers core Harness capabilities:
    - Code Repository with Secret Scanning
    - CI Pipeline with Test Intelligence
    - Continuous Deployment (Rolling and Canary strategies)
    - Continuous Verification with Prometheus
 
-2. **Advanced Partner Demo Kit** - Extends the base kit with licensed features:
+2. **Advanced Demo** (Labs 5, 7) - Extends the base kit with licensed features:
    - Security Testing Orchestration (STO)
    - Software Supply Chain Assurance (SSCA)
    - OPA Policy Enforcement
    - Advanced governance capabilities
 
-> **Note**: The advanced features (Labs 5 and 7) require a licensed partner organization. This base kit can be completed with a free Harness account.
+> **Note**: The advanced features (Labs 5 and 7) require licenses for the STO and SCS modules in Harness. Please contact your Harness Partner Account Manager for more information. The base demo can be completed with a free Harness account.
 
 ## Overview
 
@@ -67,7 +67,7 @@ The script will prompt you for:
 > **Tip**: The script saves your configuration to `.demo-config` for future runs, so you won't need to re-enter credentials.
 
 **3. Wait for completion:**
-The script takes 3-5 minutes to complete. Watch for the success message indicating all resources were created.
+The script may take several minutes to complete depending on the machine being used. Watch for the success message indicating all resources were created.
 
 ## What the Setup Script Did
 
@@ -75,7 +75,7 @@ The automated setup configured your complete demo environment:
 
 1. **Detected and Started Kubernetes** - Identified your cluster (minikube or Rancher Desktop) and ensured it's running
 2. **Deployed Prometheus** - Installed Prometheus in the `monitoring` namespace for continuous verification
-3. **Built and Pushed Docker Image** - Created the backend application Docker image and pushed it to your Docker Hub
+3. **Built and Pushed Docker Images** - Created the backend application, testing, and docs Docker images and pushed them to your Docker Hub
 4. **Provisioned Harness Resources** - Used Terraform to create the "Base Demo" project with all connectors, environments, services, pipelines, and monitored services
 5. **Saved Your Configuration** - Stored credentials in `.demo-config` for subsequent runs
 

@@ -1,6 +1,6 @@
 # Lab 5: Security Testing (STO)
 
-> **Important**: All activities in the **"Base Demo"** project
+> **Lab Type**: ADVANCED LAB - Requires licensed partner organization
 
 ## Overview
 This lab demonstrates Harness Security Testing Orchestration (STO), which integrates multiple security scanners into your CI/CD pipeline. STO provides normalized, deduplicated, and prioritized vulnerability data across all your security tools.
