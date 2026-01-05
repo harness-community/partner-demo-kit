@@ -1,9 +1,37 @@
-# Harness.io Partner Demo Kit
+# Harness Partner Demo Kit
+## Partner Technical Sales Enablement Training
 
 ## Overview
-This repository contains everything needed to deliver compelling Harness.io demonstrations using local resources. Built from our Unscripted workshop materials, this kit enables partners to quickly set up and customize Harness.io demos without requiring complex cloud infrastructure or specialized environments.
+This repository is your complete training environment for mastering Harness demonstrations and sales enablement. Designed for both **potential partners** evaluating Harness partnership opportunities and **current partners** seeking sales engineering enablement training, this kit provides everything needed to deliver compelling Harness.io demonstrations using local resources, without requiring complex cloud infrastructure or specialized environments.
+
+Built from our Unscripted conference workshop materials, this hands-on training culminates in a **customer pitch recording** where you demonstrate your ability to sell Harness to prospective clients.
 
 All demo resources are created in a Harness project called **"Base Demo"** to keep demo activities segregated from production environments.
+
+## Training Objectives
+
+After completing this training, you will be able to:
+
+✅ **Independently execute a complete Harness demonstration**
+✅ **Implement a Harness demo environment** with version-controlled sample applications and pipelines
+✅ **Construct customer-specific demonstrations** by mapping appropriate Harness features to identified pain points and creating relevant proof-of-concept environments
+
+## Key Training Takeaways
+- **Harness Skills**: Hands-on experience with CI/CD, Code Repository, Continuous Verification, and Security Testing
+- **Harness Home Lab**: Your own local demonstration environment ready for customer presentations
+
+## Training Path
+
+This training consists of four progressive sections:
+
+1. **[3-Minute Guide to Partner Technical Sales Training](#quick-start-guide)** - Get started quickly with automated setup
+2. **[Hands-On Lab: Navigate the {Unscripted} Demo Track](#step-9-run-the-demo)** - Complete the guided demo labs
+3. **[Infrastructure Setup: Building Your Harness Home Lab](#manual-setup)** - Deep dive into manual configuration
+4. **[Final: Create and Submit Your Custom Demo Recording](#next-steps)** - Demonstrate your mastery
+
+**Next Steps**: After completing the training, you'll have a fully functional Harness demo environment and the skills to customize demonstrations for customer engagements.
+
+---
 
 ## Key Benefits
 - **Minimal Prerequisites**: Runs on standard developer workstation using common tools
@@ -632,6 +660,68 @@ minikube stop
 # For Rancher Desktop - stop through the UI
 ```
 
+## Next Steps
+
+### What Happens After You Complete the Training
+
+Once you've successfully completed the demo labs and built your Harness Home Lab, you're ready to:
+
+1. **Create Your Custom Demo Recording**
+
+   This is your final assessment - a customer pitch recording that demonstrates your mastery of Harness sales enablement. You'll create a 10-15 minute recording where you pitch Harness to a pretend client.
+
+   **Recording Requirements:**
+   - Choose a specific use case or industry vertical
+   - Customize the demo to address relevant pain points for that vertical
+   - Deliver a compelling sales pitch (not just a demo walkthrough)
+   - Submit to your Harness Partner Manager for evaluation
+
+   **Evaluation Rubric:**
+
+   Your pitch will be evaluated on five key criteria:
+
+   **1. Understanding of the Module**
+   - Accurate description of Harness features and benefits
+   - Clear explanation of how Harness addresses customer pain points
+   - Technical accuracy and depth of knowledge
+
+   **2. Articulation of Value Proposition**
+   - Effective communication of Harness's unique differentiators
+   - Ability to align Harness capabilities with specific customer needs
+   - Clear ROI and business value messaging
+
+   **3. Opportunity Identification**
+   - Demonstration of how to spot potential use cases for Harness
+   - Understanding of which customer scenarios are best suited for each module
+   - Ability to qualify opportunities and map features to pain points
+
+   **4. Presentation Skills**
+   - Clear and confident delivery
+   - Logical flow of information
+   - Professional communication style
+   - Engaging storytelling and customer-focused narrative
+
+   **5. Customization and Internalization**
+   - Evidence that you've made the pitch your own, not just repeating scripted content
+   - Integration of training materials with your own insights and examples
+   - Authenticity and personal style in delivery
+   - Creative adaptation of demo scenarios to customer context
+
+2. **Apply Your Skills**
+   - Use this environment for customer proof-of-concepts
+   - Adapt the demo for specific customer scenarios
+   - Build additional demo scenarios using the same infrastructure
+
+3. **Stay Current**
+   - Join Harness partner community events and webinars
+   - Access updated demo materials and best practices
+   - Share your customizations and learnings with other partners
+
+4. **Get Certified**
+   - Complete Harness certification programs
+   - Earn Harness professional badges
+   - Advance your partner enablement journey
+
 ## Resources & Support
 
 - **Video Walkthrough**: [Watch on YouTube](https://www.youtube.com/watch?v=OgUyeZVYQeg)
@@ -642,6 +732,7 @@ minikube stop
 For questions or assistance:
 - Contact your Harness Partner Manager
 - Submit issues via [GitHub](https://github.com/harness-community/partner-demo-kit/issues)
+- Join the Harness Partner Community
 
 ## Architecture Notes
 
