@@ -724,7 +724,6 @@ Once you've successfully completed the demo labs and built your Harness Home Lab
 
 ## Resources & Support
 
-- **Video Walkthrough**: [Watch on YouTube](https://www.youtube.com/watch?v=OgUyeZVYQeg)
 - **Lab Guides**: See [markdown/](markdown/) directory for step-by-step instructions
 - **Harness Documentation**: [docs.harness.io](https://docs.harness.io)
 - **Automation Scripts**: [start-demo.sh](start-demo.sh) and [stop-demo.sh](stop-demo.sh)
