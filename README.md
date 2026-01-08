@@ -52,17 +52,24 @@ This training consists of four progressive sections:
 ## Infrastructure Requirements
 
 - **CI Builds**: Harness Cloud (requires credit card for account verification - free tier available)
-- **CD Deployments**: Local Kubernetes (Rancher Desktop or minikube)
+- **CD Deployments**: Local Kubernetes (Colima for Apple Silicon, minikube/Docker Desktop/Rancher Desktop for others)
 
 ## Prerequisites
 
 ### Required Tools
 - **Git**: Version control
 - **Docker**: Container runtime ([Docker Desktop](https://www.docker.com/products/docker-desktop) or Docker Engine)
-- **Kubernetes**: Choose one:
-  - [Rancher Desktop](https://rancherdesktop.io/) (Recommended - easier setup, no tunnel needed)
-  - [minikube](https://minikube.sigs.k8s.io/docs/start/) (Requires `minikube tunnel` for service access)
-- **kubectl**: Kubernetes CLI (usually included with Rancher Desktop/minikube)
+- **Kubernetes** (platform-specific):
+  - **macOS (Apple Silicon M1/M2/M3/M4)**: [Colima](https://github.com/abiosoft/colima) (**REQUIRED** for AMD64 emulation via Rosetta 2)
+    ```bash
+    brew install colima docker kubectl
+    colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes
+    ```
+    Note: First startup takes 5-10 minutes. Harness Cloud builds AMD64 images, so AMD64 emulation is required.
+  - **macOS (Intel)**: Choose one - [minikube](https://minikube.sigs.k8s.io/docs/start/), [Colima](https://github.com/abiosoft/colima), [Docker Desktop](https://www.docker.com/products/docker-desktop), or [Rancher Desktop](https://rancherdesktop.io/)
+  - **Windows**: [minikube](https://minikube.sigs.k8s.io/docs/start/) (recommended), [Docker Desktop](https://www.docker.com/products/docker-desktop), or [Rancher Desktop](https://rancherdesktop.io/)
+  - **Linux**: [minikube](https://minikube.sigs.k8s.io/docs/start/) or your preferred K8s distribution
+- **kubectl**: Kubernetes CLI (usually included with above tools)
 - **Helm**: Kubernetes package manager
 - **Terraform**: Infrastructure as Code tool (v1.0+)
 - **Node.js & npm**: For frontend application (Node 20+)
@@ -119,10 +126,14 @@ The `start-demo.sh` script automates the **complete demo setup** from local infr
 - Verifies Docker, kubectl, Terraform, and other required tools are installed
 - Checks that Docker daemon is running
 
-**2. Kubernetes Detection & Startup**
-- Automatically detects your Kubernetes environment (minikube, Rancher Desktop, or other)
-- Starts minikube if needed and enables metrics-server addon
-- Verifies cluster connectivity
+**2. Platform & Kubernetes Detection**
+- Detects your operating system and architecture (macOS/Windows/Linux, ARM64/AMD64)
+- Validates Kubernetes tool based on platform:
+  - Apple Silicon Macs: Requires Colima with AMD64 emulation
+  - Windows: Recommends minikube (allows Docker Desktop/Rancher Desktop)
+  - Other platforms: Flexible (minikube, Colima, Docker Desktop, Rancher Desktop)
+- Automatically starts Colima/minikube if needed
+- Verifies cluster architecture (ensures AMD64 for Apple Silicon)
 
 **3. Prometheus Deployment**
 - Creates monitoring namespace if it doesn't exist
@@ -209,37 +220,61 @@ The script stores credentials in `.demo-config` (git-ignored) for convenience:
 ### When Finished with the Demo
 
 ```bash
-# Clean up deployed applications only
+# Interactive cleanup menu (RECOMMENDED)
 ./stop-demo.sh
-
-# Full cleanup (everything - all options below)
-./stop-demo.sh --full-cleanup
 ```
 
-**Shutdown Script Options:**
-- `./stop-demo.sh` - Remove deployed applications (frontend/backend)
+**Interactive Cleanup Menu:**
+
+When you run `./stop-demo.sh` without arguments, you'll see a user-friendly menu with the following options:
+
+1. **Stop K8s deployments only** (Recommended - preserves Harness resources)
+   - Removes frontend and backend deployments/services
+   - Keeps Harness project, Prometheus, and cluster running
+   - Easy to restart demo later with: `./start-demo.sh --skip-terraform`
+
+2. **Stop K8s deployments + Delete Prometheus**
+   - Same as option 1, but also removes Prometheus monitoring
+
+3. **Stop K8s deployments + Stop cluster**
+   - Stops local deployments and shuts down Colima/minikube
+   - Preserves Harness resources for next time
+
+4. **Full cleanup (delete all Harness resources)**
+   - Deletes Harness 'Base Demo' project
+   - Deletes Docker Hub repository
+   - Removes Prometheus
+   - Keeps cluster running and config files
+
+5. **Complete cleanup (everything including cluster)**
+   - Same as option 4, but also stops the cluster
+
+6. **Custom cleanup options**
+   - Choose exactly what to cleanup
+
+0. **Exit without doing anything**
+
+**Command-Line Flags (Skip Interactive Menu):**
+
+For automated/scripted use:
 - `./stop-demo.sh --delete-prometheus` - Also remove Prometheus monitoring
-- `./stop-demo.sh --stop-cluster` - Also stop Kubernetes cluster (minikube only)
+- `./stop-demo.sh --stop-cluster` - Also stop Kubernetes cluster (Colima or minikube)
 - `./stop-demo.sh --delete-harness-project` - Delete Harness "Base Demo" project via API
 - `./stop-demo.sh --delete-docker-repo` - Delete Docker Hub harness-demo repository via API
 - `./stop-demo.sh --delete-config-files` - Delete .demo-config, se-parms.tfvars, and IaC state files
-- `./stop-demo.sh --full-cleanup` - Complete cleanup (all of the above)
+- `./stop-demo.sh --full-cleanup` - Complete cleanup (all of the above except config files)
+- `./stop-demo.sh --no-interactive` - Skip menu, use minimal cleanup
 
-**API-Based Cleanup Features:**
+**Recommended Workflow:**
 
-The script can now clean up Harness and Docker Hub resources using API calls:
-
-- **Harness Project Deletion**: Uses your cached Harness PAT from `.demo-config` to delete the "Base Demo" project and all its resources (pipelines, services, environments, connectors, etc.)
-- **Docker Hub Repository Deletion**: Uses your cached Docker credentials to delete the `harness-demo` repository and all its images
-- **Interactive Prompts**: Both operations require explicit "yes" confirmation before proceeding
-
-**Example Combinations:**
+After running the demo, use the default interactive menu (option 1) to preserve Harness resources:
 ```bash
-# Clean up everything except Kubernetes
-./stop-demo.sh --delete-harness-project --delete-docker-repo --delete-config-files
+./stop-demo.sh  # Choose option 1 (default)
+```
 
-# Clean up only cloud resources (keep local infrastructure)
-./stop-demo.sh --delete-harness-project --delete-docker-repo
+To restart the demo later without recreating Harness resources:
+```bash
+./start-demo.sh --skip-terraform
 ```
 
 > **Next Steps**: After running `start-demo.sh` successfully:

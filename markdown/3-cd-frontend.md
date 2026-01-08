@@ -3,11 +3,11 @@
 > **Lab Type**: BASE DEMO - Available with free Harness account
 
 ## Overview
-This lab extends your CI pipeline with a deployment stage for the frontend application. You'll deploy to your local Kubernetes cluster (minikube or Rancher Desktop) using a rolling deployment strategy.
+This lab extends your CI pipeline with a deployment stage for the frontend application. You'll deploy to your local Kubernetes cluster (Colima, minikube, or Rancher Desktop) using a rolling deployment strategy.
 
 ## Prerequisites
 - Completed Lab 2 (CI Pipeline)
-- Kubernetes cluster running (minikube or Rancher Desktop)
+- Kubernetes cluster running (Colima for Apple Silicon, minikube, or Rancher Desktop)
 - "Base Demo" project with Dev environment and K8s Dev infrastructure (created by Terraform)
 
 ## Step 1: Add a Deploy Stage
@@ -117,6 +117,13 @@ You should see:
 - `web-frontend-svc` service created
 
 ### Access the Application
+
+**With Colima (Apple Silicon Macs):**
+```bash
+# Services are automatically accessible
+# Open your browser to:
+http://localhost:8080
+```
 
 **With Rancher Desktop:**
 ```bash

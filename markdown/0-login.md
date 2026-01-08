@@ -35,7 +35,7 @@ Before starting, ensure you have:
 
 2. **Local Environment**
    - Docker Engine running
-   - Kubernetes cluster: Rancher Desktop (recommended) or minikube
+   - Kubernetes cluster: Colima (macOS Apple Silicon), minikube, Docker Desktop, or Rancher Desktop
    - Terraform installed
    - kubectl and helm installed
    - Git client installed
@@ -73,7 +73,7 @@ The script may take several minutes to complete depending on the machine being u
 
 The automated setup configured your complete demo environment:
 
-1. **Detected and Started Kubernetes** - Identified your cluster (minikube or Rancher Desktop) and ensured it's running
+1. **Detected and Started Kubernetes** - Identified your cluster (Colima, minikube, Docker Desktop, or Rancher Desktop) and ensured it's running
 2. **Deployed Prometheus** - Installed Prometheus in the `monitoring` namespace for continuous verification
 3. **Built and Pushed Docker Images** - Created the backend application, testing, and docs Docker images and pushed them to your Docker Hub
 4. **Provisioned Harness Resources** - Used Terraform to create the "Base Demo" project with all connectors, environments, services, pipelines, and monitored services
@@ -121,15 +121,23 @@ Before installing the delegate, verify that Terraform created all required resou
 Navigate to the **"Base Demo"** project and verify:
 
 **Code Repository:**
-- Go to **Code Repository** module
+- Using the module selection button ![](images/2026-01-07_10-33-10.jpg)
+- Choose the **Code Repository** module
 - Verify `partner_demo_kit` repository exists
 
+**Continuous Delivery & Git Ops**
+- Next, using the module selection button again, choose the **Continuous Delivery & Git Ops** module
+- If the setup wizard dialog launches, you can simple **X** out of it at the upper-right corner
+
 **Connectors:**
-- Go to **Project Setup** > **Connectors**
+- On the left-side menu, go to **Project Settings** > **Connectors**
 - Verify these connectors exist:
-  - `workshop-docker` - Docker Hub connector
+  - `workshopdocker` - Docker Hub connector
+    - Should show Success
   - `workshop_k8s` - Kubernetes connector (for local cluster)
+    - Will show "Failed" for now as we haven't installed a delegate yet
   - Prometheus connector (for continuous verification)
+    - Will show "Failed" for now as we haven't installed a delegate yet
 
 **Environments:**
 - Go to **Environments**
@@ -141,11 +149,11 @@ Navigate to the **"Base Demo"** project and verify:
 - Verify `backend` service exists and is configured with K8s manifests
 
 **Templates:**
-- Go to **Templates** (under Project Setup)
+- Go to **Templates** (under Project Settings)
 - Verify `Compile Application` step template exists
 
 **Monitored Services:**
-- Go to **Service Reliability** > **Monitored Services**
+- Go to **Monitored Services**
 - Verify `backend_dev` monitored service exists for continuous verification
 
 ### Local Infrastructure
@@ -212,10 +220,11 @@ kubectl get pods -n harness-delegate-ng
 
 Test that the delegate can access your local Kubernetes cluster:
 
-1. Go to **Project Setup** > **Connectors** in the "Base Demo" project
+1. Go to **Project Settings** > **Connectors** in the "Base Demo" project
 2. Click on the `workshop_k8s` connector
 3. Click **Test Connection** (top right)
-4. The test should succeed, confirming the delegate can communicate with your local cluster
+4. Repeat steps 1-3 for the `prometheus` connector
+5. The tests should succeed, confirming the delegate can communicate from your local cluster to Harness
 
 ## Troubleshooting
 
@@ -308,7 +317,7 @@ Now that you've completed the setup and installed the delegate, you're ready to 
 - Ensure your delegate shows **Connected** status in Harness
 - Verify all connectors in the "Base Demo" project test successfully
 - If using minikube, keep `minikube tunnel` running in a separate terminal throughout the demo
-- Rancher Desktop users don't need a tunnel - services are automatically accessible
+- Colima, Rancher Desktop, and Docker Desktop users don't need a tunnel - services are automatically accessible
 
 **Throughout the Demo:**
 - All activities take place in the **"Base Demo"** project

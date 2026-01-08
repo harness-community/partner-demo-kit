@@ -87,19 +87,21 @@ If you do not wish to use Harness Cloud, you can use your local Kubernetes clust
 ## Step 4: Add Run Tests Step
 
 1. On the **Execution** tab, click **+ Add Step**
-2. Select **Add Step** > **Run**
+2. Select **Add Step** > **Test Intelligence**
 3. Configure:
    - **Name**: `Test Intelligence`
-   - **Container Registry**: `Workshop Docker`
-   - **Image**: `dockerhubaccountid/harness-demo:test-latest`
-     - ⚠️ Replace `dockerhubaccountid` with YOUR Docker Hub username
-     - ⚠️ Use `test-latest` tag (NOT `backend-latest`) - this image has pytest pre-installed
    - **Command**:
      ```bash
      mkdir -p reports
      cd ./python-tests
      pytest --junitxml=reports/junit.xml --html=reports/report.html --cov=. --cov-report=xml:reports/coverage.xml
      ```
+   - Expand the `Optional Configuration`
+   - **Container Registry**: `Workshop Docker`
+   - **Image**: `dockerhubaccountid/harness-demo:test-latest`
+     - ⚠️ Replace `dockerhubaccountid` with YOUR Docker Hub username
+     - ⚠️ Use `test-latest` tag (NOT `backend-latest`) - this image has pytest pre-installed
+
 4. Click **Apply Changes**
 
 > **Important**: The `test-latest` image is a lightweight Python container with pytest pre-installed specifically for CI testing. This is different from `backend-latest` which contains the Django application.
@@ -155,7 +157,7 @@ If you do not wish to use Harness Cloud, you can use your local Kubernetes clust
 
 ## Step 6: Add Docker Build and Push Step
 
-1. Click **+ Add Step**
+1. Still in the `Build` Stage, Click **+ Add Step**
 2. Select **Add Step** > **Build and Push an image to Docker Registry**
 3. Configure:
    - **Name**: `Push to Dockerhub`

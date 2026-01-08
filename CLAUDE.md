@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a Harness.io Partner Demo Kit - a self-contained demonstration environment for showcasing Harness platform capabilities (CI/CD, Code Repository, Continuous Verification, Security Testing). The demo runs entirely on local infrastructure (minikube or Rancher Desktop) to minimize external dependencies.
+This is a Harness.io Partner Demo Kit - a self-contained demonstration environment for showcasing Harness platform capabilities (CI/CD, Code Repository, Continuous Verification, Security Testing). The demo runs entirely on local infrastructure (Colima for Apple Silicon, minikube/Docker Desktop/Rancher Desktop for other platforms) to minimize external dependencies.
 
 **Important**: All Harness resources are created in a project called "Base Demo". This segregates demo resources from production environments.
 
@@ -115,12 +115,18 @@ chmod +x start-demo.sh stop-demo.sh
 ```
 
 **What start-demo.sh automates:**
-1. Checks prerequisites (Docker, kubectl, Terraform)
-2. Detects and starts Kubernetes (minikube/Rancher Desktop)
-3. **Creates Docker Hub secret** (`dockerhub-pull`) in Kubernetes for pulling Harness CI images
-4. Deploys Prometheus for continuous verification
-5. Authenticates to Docker Hub (smart detection of existing login)
-6. **Detects architecture** (Intel/AMD vs Apple Silicon) and builds Docker images with correct platform:
+1. **Detects platform** (macOS/Windows/Linux) and architecture (ARM64/AMD64)
+2. **Validates Kubernetes tool** based on platform:
+   - Apple Silicon Macs: Requires Colima with AMD64 emulation (Rosetta 2)
+   - Windows: Recommends minikube (allows Docker Desktop/Rancher Desktop)
+   - Other platforms: Flexible (minikube, Colima, Docker Desktop, Rancher Desktop)
+3. Checks prerequisites (Docker, kubectl, Terraform)
+4. Detects and starts Kubernetes (Colima/minikube) if needed
+5. **Verifies cluster architecture** (ensures AMD64 for Apple Silicon compatibility with Harness Cloud)
+6. **Creates Docker Hub secret** (`dockerhub-pull`) in Kubernetes for pulling Harness CI images
+7. Deploys Prometheus for continuous verification
+8. Authenticates to Docker Hub (smart detection of existing login)
+9. **Detects architecture** (Intel/AMD vs Apple Silicon) and builds Docker images with correct platform:
    - Backend image (backend-latest)
    - Test image (test-latest)
    - Documentation image (docs-latest)
@@ -131,13 +137,32 @@ chmod +x start-demo.sh stop-demo.sh
 11. Saves configuration to `.demo-config` for subsequent runs
 12. Deploys documentation to Kubernetes at http://localhost:30001
 
-**stop-demo.sh** - Cleanup script:
+**stop-demo.sh** - Interactive cleanup script with smart defaults:
 ```bash
-./stop-demo.sh                    # Remove deployed applications
-./stop-demo.sh --delete-prometheus # Also remove Prometheus
-./stop-demo.sh --stop-cluster     # Also stop minikube
-./stop-demo.sh --full-cleanup     # Complete cleanup
+./stop-demo.sh                    # Shows interactive menu (default: minimal cleanup)
+
+# Interactive menu options:
+# 1) Stop K8s deployments only (Recommended - preserves Harness resources)
+# 2) Stop K8s deployments + Delete Prometheus
+# 3) Stop K8s deployments + Stop cluster
+# 4) Full cleanup (delete all Harness resources)
+# 5) Complete cleanup (everything including cluster)
+# 6) Custom cleanup options
+# 0) Exit without doing anything
+
+# Command-line flags (skip interactive menu):
+./stop-demo.sh --delete-prometheus      # Also remove Prometheus
+./stop-demo.sh --stop-cluster           # Also stop Colima/minikube
+./stop-demo.sh --delete-harness-project # Delete Harness 'Base Demo' project
+./stop-demo.sh --delete-docker-repo     # Delete Docker Hub repository
+./stop-demo.sh --full-cleanup           # Complete cleanup (keeps credentials)
+./stop-demo.sh --no-interactive         # Skip menu, use minimal cleanup
 ```
+
+**Recommended Workflow:**
+- After running the demo, use the default interactive menu (option 1) to stop deployments
+- Preserves Harness resources for easy restart: `./start-demo.sh --skip-terraform`
+- Full cleanup only needed when completely resetting the demo environment
 
 **Credential Management:**
 - Credentials saved to `.demo-config` (git-ignored)
@@ -165,7 +190,7 @@ terraform apply -auto-approve plan.tfplan
 
 The IaC configuration creates a "Base Demo" project with:
 - Harness project "Base Demo"
-- K8s connector (`workshop_k8s`) - for local minikube/Rancher Desktop cluster
+- K8s connector (`workshop_k8s`) - for local Kubernetes cluster (Colima/minikube/Rancher Desktop/Docker Desktop)
 - Docker connector (`workshopdocker`) - for Docker Hub
 - Prometheus connector - for continuous verification
 - Docker username/password secrets
@@ -176,10 +201,45 @@ The IaC configuration creates a "Base Demo" project with:
 - Monitored services (backend_dev, backend_prod) for continuous verification
 - Code repository (`partner_demo_kit`) mirrored from GitHub
 
-### Kubernetes (Minikube or Rancher Desktop)
+### Kubernetes (Platform-Specific Setup)
 
-**With Minikube:**
+**Apple Silicon (M1/M2/M3/M4) - Colima with Rosetta 2 (REQUIRED):**
 ```bash
+# Install Colima
+brew install colima docker kubectl
+
+# Start Colima with AMD64 emulation via Rosetta 2
+colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes
+
+# Note: First startup takes 5-10 minutes while downloading images
+
+# Verify AMD64 architecture (should show "amd64")
+kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.architecture}'
+
+# Check Colima status
+colima status  # Should show "arch: x86_64"
+
+# Setup Prometheus (from kit/ directory)
+cd kit
+kubectl create namespace monitoring
+kubectl -n monitoring apply -f ./prometheus.yml
+
+# View deployments
+kubectl get pods -A | grep deployment
+kubectl get services -A | grep svc
+
+# Cleanup
+kubectl delete deployment frontend-deployment backend-deployment
+kubectl delete service web-frontend-svc web-backend-svc
+
+# Stop Colima
+colima stop
+```
+
+**Windows - Minikube (Recommended):**
+```bash
+# Download from: https://minikube.sigs.k8s.io/docs/start/
+
 # Start minikube and enable addons
 minikube start
 minikube addons enable metrics-server
@@ -197,34 +257,29 @@ kubectl get services -A | grep svc
 minikube tunnel
 
 # Cleanup
-kubectl delete deployment frontend-deployment
-kubectl delete service web-frontend-svc
-kubectl delete deployment backend-deployment
-kubectl delete service web-backend-svc
+kubectl delete deployment frontend-deployment backend-deployment
+kubectl delete service web-frontend-svc web-backend-svc
 ```
 
-**With Rancher Desktop:**
+**Intel Mac / Linux - Flexible Options:**
 ```bash
-# Rancher Desktop provides a built-in Kubernetes cluster
-# Enable Kubernetes in Rancher Desktop preferences
+# Option 1: Minikube
+minikube start
+minikube addons enable metrics-server
 
-# Setup Prometheus (from kit/ directory)
+# Option 2: Colima (no need for architecture emulation)
+colima start --cpu 4 --memory 8 --kubernetes
+
+# Option 3: Rancher Desktop - Enable Kubernetes in preferences
+# Option 4: Docker Desktop - Enable Kubernetes in settings
+
+# Prometheus setup (same for all)
 cd kit
 kubectl create namespace monitoring
 kubectl -n monitoring apply -f ./prometheus.yml
 
-# View deployments
-kubectl get pods -A | grep deployment
-kubectl get services -A | grep svc
-
-# Services are automatically accessible (no tunnel needed)
-# Access application at: http://localhost:8080
-
-# Cleanup
-kubectl delete deployment frontend-deployment
-kubectl delete service web-frontend-svc
-kubectl delete deployment backend-deployment
-kubectl delete service web-backend-svc
+# Services automatically accessible with Rancher/Docker Desktop (no tunnel needed)
+# For minikube: Run 'minikube tunnel' in a separate terminal
 ```
 
 ### Prometheus with ngrok (Optional)
@@ -258,7 +313,10 @@ Configure [kit/se-parms.tfvars](kit/se-parms.tfvars) with:
 
 ### Environment Setup Requirements
 - Docker and Docker Hub account with `harness-demo` repository created
-- **Kubernetes**: Either minikube with metrics-server addon OR Rancher Desktop
+- **Kubernetes** (platform-specific):
+  - **Apple Silicon Macs**: Colima with Rosetta 2 for AMD64 emulation (REQUIRED)
+  - **Windows**: minikube (recommended), Docker Desktop, or Rancher Desktop
+  - **Intel Mac/Linux**: minikube, Colima, Docker Desktop, or Rancher Desktop
 - **Terraform** - IaC tool for provisioning Harness resources
 - kubectl and helm
 - Harness account with CD, CI, and Code Repo modules enabled
@@ -301,7 +359,9 @@ The demo demonstrates (all within "Base Demo" project):
 ## Infrastructure Architecture
 
 - **CI Builds**: Use Harness Cloud (requires credit card verification, works on all platforms)
-- **CD Deployments**: Use local Kubernetes cluster (minikube or Rancher Desktop)
+- **CD Deployments**: Use local Kubernetes cluster
+  - Apple Silicon: Colima with AMD64 emulation (Rosetta 2)
+  - Other platforms: minikube, Docker Desktop, or Rancher Desktop
 
 ## Reset/Cleanup Procedure
 
@@ -352,8 +412,12 @@ This repository was originally created for Instruqt-based workshops. Key differe
 - **Removed**: Instruqt-specific connector named `instruqt_k8` → Renamed to `workshop_k8s` for local K8s
 - **Removed**: Instruqt sandbox URLs in compile template → Changed to `http://localhost:8000`
 - **Removed**: Instruqt variable references like `<+variable.sandbox_id>` → Simplified for local use
+- **Added**: Platform-specific Kubernetes requirements (Colima for Apple Silicon, minikube for Windows)
+- **Added**: OS and architecture detection in start-demo.sh
+- **Added**: Automatic AMD64 architecture verification for Apple Silicon
 - **Added**: Instructions for Mac/Linux PAT export
 - **Added**: ngrok option for exposing Prometheus
 - **Added**: Git credential setup for Harness Code Repository
-- **Added**: Rancher Desktop as alternative to minikube
+- **Added**: Colima as primary option for macOS (especially Apple Silicon)
+- **Added**: Rancher Desktop and Docker Desktop as alternatives
 - **Clarified**: All resources go into "Base Demo" project for proper segregation

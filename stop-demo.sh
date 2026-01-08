@@ -10,11 +10,12 @@
 # Usage: ./stop-demo.sh [OPTIONS]
 #   OPTIONS:
 #     --delete-prometheus       Also delete Prometheus monitoring
-#     --stop-cluster            Stop the Kubernetes cluster (minikube only)
+#     --stop-cluster            Stop the Kubernetes cluster (minikube/colima)
 #     --delete-harness-project  Delete Harness "Base Demo" project via API
 #     --delete-docker-repo      Delete Docker Hub harness-demo repository via API
 #     --delete-config-files     Delete .demo-config, se-parms.tfvars, and IaC state files
 #     --full-cleanup            Delete everything (all of the above)
+#     --no-interactive          Skip interactive menu (for scripting)
 #
 
 # Colors for output
@@ -22,6 +23,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Configuration
@@ -30,6 +32,7 @@ STOP_CLUSTER=false
 DELETE_HARNESS_PROJECT=false
 DELETE_DOCKER_REPO=false
 DELETE_CONFIG_FILES=false
+NO_INTERACTIVE=false
 
 # Save original argument count
 ORIGINAL_ARG_COUNT=$#
@@ -65,30 +68,178 @@ while [[ $# -gt 0 ]]; do
       DELETE_CONFIG_FILES=false
       shift
       ;;
+    --no-interactive)
+      NO_INTERACTIVE=true
+      shift
+      ;;
     *)
       echo -e "${RED}Unknown option: $1${NC}"
       echo "Usage: ./stop-demo.sh [OPTIONS]"
       echo "  --delete-prometheus       Delete Prometheus monitoring"
-      echo "  --stop-cluster            Stop Kubernetes cluster (minikube only)"
+      echo "  --stop-cluster            Stop Kubernetes cluster (minikube/colima)"
       echo "  --delete-harness-project  Delete Harness 'Base Demo' project"
       echo "  --delete-docker-repo      Delete Docker Hub repository"
       echo "  --delete-config-files     Delete config and state files (.demo-config, terraform state)"
       echo "  --full-cleanup            Everything except credentials (stops cluster, keeps credentials)"
+      echo "  --no-interactive          Skip interactive menu (for scripting)"
       echo ""
-      echo "Default (no options): Cleanup all resources but keep cluster running and preserve credentials"
+      echo "Default (no options): Shows interactive menu to choose cleanup options"
       exit 1
       ;;
   esac
 done
 
-# If no arguments provided, default to cleanup (but keep cluster running and preserve credentials)
-if [ "$ORIGINAL_ARG_COUNT" -eq 0 ]; then
-  echo -e "${YELLOW}No options provided - defaulting to cleanup (keeping cluster running, preserving credentials)${NC}"
+# Interactive menu function
+show_cleanup_menu() {
+  echo -e "${BLUE}========================================${NC}"
+  echo -e "${BLUE}Harness Partner Demo Kit - Cleanup Menu${NC}"
+  echo -e "${BLUE}========================================${NC}"
   echo ""
-  DELETE_PROMETHEUS=true
+  echo "What would you like to cleanup?"
+  echo ""
+  echo -e "${CYAN}1)${NC} Stop K8s deployments only ${GREEN}(Recommended - preserves Harness resources)${NC}"
+  echo "   - Removes frontend and backend deployments/services"
+  echo "   - Keeps Harness project, Prometheus, and cluster running"
+  echo "   - Easy to restart demo later with: ./start-demo.sh"
+  echo ""
+  echo -e "${CYAN}2)${NC} Stop K8s deployments + Delete Prometheus"
+  echo "   - Same as option 1, but also removes Prometheus monitoring"
+  echo ""
+  echo -e "${CYAN}3)${NC} Stop K8s deployments + Stop cluster"
+  echo "   - Stops local deployments and shuts down minikube/colima"
+  echo "   - Preserves Harness resources for next time"
+  echo ""
+  echo -e "${CYAN}4)${NC} Full cleanup (delete all Harness resources)"
+  echo "   - Deletes Harness 'Base Demo' project"
+  echo "   - Deletes Docker Hub repository"
+  echo "   - Removes Prometheus"
+  echo "   - Keeps cluster running and config files"
+  echo ""
+  echo -e "${CYAN}5)${NC} Complete cleanup (everything including cluster)"
+  echo "   - Same as option 4, but also stops the cluster"
+  echo ""
+  echo -e "${CYAN}6)${NC} Custom cleanup options"
+  echo "   - Choose exactly what to cleanup"
+  echo ""
+  echo -e "${CYAN}0)${NC} Exit without doing anything"
+  echo ""
+  read -p "Enter your choice [0-6] (default: 1): " MENU_CHOICE
+
+  # Default to option 1 if empty
+  MENU_CHOICE=${MENU_CHOICE:-1}
+
+  case $MENU_CHOICE in
+    1)
+      echo ""
+      echo -e "${GREEN}✓${NC} Minimal cleanup selected - stopping K8s deployments only"
+      DELETE_PROMETHEUS=false
+      STOP_CLUSTER=false
+      DELETE_HARNESS_PROJECT=false
+      DELETE_DOCKER_REPO=false
+      DELETE_CONFIG_FILES=false
+      ;;
+    2)
+      echo ""
+      echo -e "${GREEN}✓${NC} Stopping K8s deployments and deleting Prometheus"
+      DELETE_PROMETHEUS=true
+      STOP_CLUSTER=false
+      DELETE_HARNESS_PROJECT=false
+      DELETE_DOCKER_REPO=false
+      DELETE_CONFIG_FILES=false
+      ;;
+    3)
+      echo ""
+      echo -e "${GREEN}✓${NC} Stopping K8s deployments and cluster"
+      DELETE_PROMETHEUS=false
+      STOP_CLUSTER=true
+      DELETE_HARNESS_PROJECT=false
+      DELETE_DOCKER_REPO=false
+      DELETE_CONFIG_FILES=false
+      ;;
+    4)
+      echo ""
+      echo -e "${GREEN}✓${NC} Full cleanup - deleting all Harness resources"
+      DELETE_PROMETHEUS=true
+      STOP_CLUSTER=false
+      DELETE_HARNESS_PROJECT=true
+      DELETE_DOCKER_REPO=true
+      DELETE_CONFIG_FILES=false
+      ;;
+    5)
+      echo ""
+      echo -e "${GREEN}✓${NC} Complete cleanup - everything including cluster"
+      DELETE_PROMETHEUS=true
+      STOP_CLUSTER=true
+      DELETE_HARNESS_PROJECT=true
+      DELETE_DOCKER_REPO=true
+      DELETE_CONFIG_FILES=false
+      ;;
+    6)
+      echo ""
+      echo -e "${CYAN}Custom cleanup options:${NC}"
+      echo ""
+      read -p "Delete Prometheus monitoring? [y/N]: " DELETE_PROM_CHOICE
+      DELETE_PROMETHEUS=false
+      if [[ "$DELETE_PROM_CHOICE" =~ ^[Yy]$ ]]; then
+        DELETE_PROMETHEUS=true
+      fi
+
+      read -p "Stop Kubernetes cluster (minikube/colima)? [y/N]: " STOP_CLUSTER_CHOICE
+      STOP_CLUSTER=false
+      if [[ "$STOP_CLUSTER_CHOICE" =~ ^[Yy]$ ]]; then
+        STOP_CLUSTER=true
+      fi
+
+      read -p "Delete Harness 'Base Demo' project? [y/N]: " DELETE_HARNESS_CHOICE
+      DELETE_HARNESS_PROJECT=false
+      if [[ "$DELETE_HARNESS_CHOICE" =~ ^[Yy]$ ]]; then
+        DELETE_HARNESS_PROJECT=true
+      fi
+
+      read -p "Delete Docker Hub repository? [y/N]: " DELETE_DOCKER_CHOICE
+      DELETE_DOCKER_REPO=false
+      if [[ "$DELETE_DOCKER_CHOICE" =~ ^[Yy]$ ]]; then
+        DELETE_DOCKER_REPO=true
+      fi
+
+      read -p "Delete config files (.demo-config, terraform state)? [y/N]: " DELETE_CONFIG_CHOICE
+      DELETE_CONFIG_FILES=false
+      if [[ "$DELETE_CONFIG_CHOICE" =~ ^[Yy]$ ]]; then
+        DELETE_CONFIG_FILES=true
+      fi
+
+      echo ""
+      echo -e "${GREEN}✓${NC} Custom cleanup configured"
+      ;;
+    0)
+      echo ""
+      echo "Exiting without making any changes."
+      exit 0
+      ;;
+    *)
+      echo ""
+      echo -e "${RED}Invalid choice. Defaulting to minimal cleanup (option 1).${NC}"
+      DELETE_PROMETHEUS=false
+      STOP_CLUSTER=false
+      DELETE_HARNESS_PROJECT=false
+      DELETE_DOCKER_REPO=false
+      DELETE_CONFIG_FILES=false
+      ;;
+  esac
+  echo ""
+}
+
+# If no arguments provided and not in non-interactive mode, show the menu
+if [ "$ORIGINAL_ARG_COUNT" -eq 0 ] && [ "$NO_INTERACTIVE" = false ]; then
+  show_cleanup_menu
+elif [ "$ORIGINAL_ARG_COUNT" -eq 0 ] && [ "$NO_INTERACTIVE" = true ]; then
+  # Non-interactive mode with no args: minimal cleanup
+  echo -e "${YELLOW}Non-interactive mode: defaulting to minimal cleanup${NC}"
+  echo ""
+  DELETE_PROMETHEUS=false
   STOP_CLUSTER=false
-  DELETE_HARNESS_PROJECT=true
-  DELETE_DOCKER_REPO=true
+  DELETE_HARNESS_PROJECT=false
+  DELETE_DOCKER_REPO=false
   DELETE_CONFIG_FILES=false
 fi
 
@@ -211,10 +362,14 @@ fi
 # Detect Kubernetes environment
 K8S_TYPE=""
 if [ "$K8S_AVAILABLE" = true ]; then
-  if kubectl config current-context 2>/dev/null | grep -q "minikube"; then
+  if kubectl config current-context 2>/dev/null | grep -q "colima"; then
+    K8S_TYPE="colima"
+  elif kubectl config current-context 2>/dev/null | grep -q "minikube"; then
     K8S_TYPE="minikube"
   elif kubectl config current-context 2>/dev/null | grep -q "rancher-desktop"; then
     K8S_TYPE="rancher-desktop"
+  elif kubectl config current-context 2>/dev/null | grep -q "docker-desktop"; then
+    K8S_TYPE="docker-desktop"
   else
     K8S_TYPE="other"
   fi
@@ -749,9 +904,15 @@ fi
 
 fi  # End of K8S_AVAILABLE check for status display
 
-# Stop cluster (optional, minikube only)
+# Stop cluster (optional)
 if [ "$STOP_CLUSTER" = true ] && [ "$K8S_AVAILABLE" = true ]; then
-  if [ "$K8S_TYPE" = "minikube" ]; then
+  if [ "$K8S_TYPE" = "colima" ]; then
+    print_section "Stopping Colima"
+
+    print_info "Stopping Colima cluster..."
+    colima stop
+    print_status "Colima stopped"
+  elif [ "$K8S_TYPE" = "minikube" ]; then
     print_section "Stopping minikube"
 
     print_info "Stopping minikube cluster..."
@@ -760,11 +921,16 @@ if [ "$STOP_CLUSTER" = true ] && [ "$K8S_AVAILABLE" = true ]; then
   elif [ "$K8S_TYPE" = "rancher-desktop" ]; then
     print_info "Cannot automatically stop Rancher Desktop"
     print_info "Please stop it manually through the Rancher Desktop UI"
+  elif [ "$K8S_TYPE" = "docker-desktop" ]; then
+    print_info "Cannot automatically stop Docker Desktop"
+    print_info "Please stop it manually through the Docker Desktop UI"
   else
     print_info "Cluster type '$K8S_TYPE' - not stopping automatically"
   fi
 else
-  if [ "$K8S_TYPE" = "minikube" ]; then
+  if [ "$K8S_TYPE" = "colima" ]; then
+    print_info "Keeping Colima running (use --stop-cluster to stop)"
+  elif [ "$K8S_TYPE" = "minikube" ]; then
     print_info "Keeping minikube running (use --stop-cluster to stop)"
   fi
 fi
@@ -805,8 +971,8 @@ else
   echo "  ⊘ Configuration files (still exist)"
 fi
 
-if [ "$STOP_CLUSTER" = true ] && [ "$K8S_TYPE" = "minikube" ]; then
-  echo "  ✓ Kubernetes cluster (minikube stopped)"
+if [ "$STOP_CLUSTER" = true ] && ([ "$K8S_TYPE" = "minikube" ] || [ "$K8S_TYPE" = "colima" ]); then
+  echo "  ✓ Kubernetes cluster ($K8S_TYPE stopped)"
 elif [ "$K8S_AVAILABLE" = true ]; then
   echo "  ⊘ Kubernetes cluster (still running)"
 fi
@@ -846,6 +1012,35 @@ fi
 
 echo ""
 
+# Show helpful restart instructions if Harness resources were preserved
+if [ "$DELETE_HARNESS_PROJECT" = false ] && [ "$DELETE_PROMETHEUS" = false ]; then
+  echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "${GREEN}Ready to restart the demo!${NC}"
+  echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+  echo "Your Harness resources are preserved. To restart the demo:"
+  echo ""
+
+  if [ "$STOP_CLUSTER" = true ]; then
+    echo -e "${CYAN}1. Start your Kubernetes cluster:${NC}"
+    if [ "$K8S_TYPE" = "colima" ]; then
+      echo "   colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+    elif [ "$K8S_TYPE" = "minikube" ]; then
+      echo "   minikube start"
+    fi
+    echo ""
+    echo -e "${CYAN}2. Run the demo startup:${NC}"
+    echo "   ./start-demo.sh --skip-terraform"
+  else
+    echo -e "${CYAN}Run the demo startup:${NC}"
+    echo "   ./start-demo.sh --skip-terraform"
+  fi
+  echo ""
+  echo "The --skip-terraform flag will skip Harness resource creation"
+  echo "and just rebuild/push images and deploy to your local cluster."
+  echo ""
+fi
+
 # Show options for additional cleanup
 SUGGEST_FULL_CLEANUP=false
 if [ "$DELETE_PROMETHEUS" = false ] || [ "$STOP_CLUSTER" = false ] || [ "$DELETE_HARNESS_PROJECT" = false ] || [ "$DELETE_DOCKER_REPO" = false ] || [ "$DELETE_CONFIG_FILES" = false ]; then
@@ -853,12 +1048,10 @@ if [ "$DELETE_PROMETHEUS" = false ] || [ "$STOP_CLUSTER" = false ] || [ "$DELETE
 fi
 
 if [ "$SUGGEST_FULL_CLEANUP" = true ]; then
-  echo "For additional cleanup options:"
+  echo "For additional cleanup options, run:"
+  echo "  ./stop-demo.sh"
   echo ""
-  echo "Clean everything (keeps credentials):"
-  echo "  ./stop-demo.sh --full-cleanup"
-  echo ""
-  echo "Or select specific cleanup options:"
+  echo "Or use command-line flags:"
   if [ "$DELETE_HARNESS_PROJECT" = false ]; then
     echo "  ./stop-demo.sh --delete-harness-project    # Delete Harness project"
   fi
@@ -871,9 +1064,10 @@ if [ "$SUGGEST_FULL_CLEANUP" = true ]; then
   if [ "$DELETE_PROMETHEUS" = false ] && [ "$K8S_AVAILABLE" = true ]; then
     echo "  ./stop-demo.sh --delete-prometheus         # Delete Prometheus"
   fi
-  if [ "$STOP_CLUSTER" = false ] && [ "$K8S_TYPE" = "minikube" ]; then
-    echo "  ./stop-demo.sh --stop-cluster              # Stop minikube"
+  if [ "$STOP_CLUSTER" = false ] && ([ "$K8S_TYPE" = "minikube" ] || [ "$K8S_TYPE" = "colima" ]); then
+    echo "  ./stop-demo.sh --stop-cluster              # Stop $K8S_TYPE"
   fi
+  echo "  ./stop-demo.sh --full-cleanup              # Delete everything"
   echo ""
 fi
 

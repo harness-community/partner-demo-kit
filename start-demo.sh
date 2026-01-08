@@ -3,7 +3,11 @@
 # Harness Partner Demo Kit - Startup Script
 #
 # This script sets up and starts all local infrastructure needed for the demo:
-# - Kubernetes cluster (minikube or Rancher Desktop)
+# - Kubernetes cluster (platform-specific):
+#   * macOS (Apple Silicon): Colima with Rosetta 2 for AMD64 emulation
+#   * macOS (Intel): minikube, Rancher Desktop, Docker Desktop, or Colima
+#   * Windows: minikube, Rancher Desktop, or Docker Desktop
+#   * Linux: minikube or other K8s distributions
 # - Prometheus monitoring
 # - Docker image builds (backend, test, docs) with automatic architecture detection
 #   * Detects Apple Silicon (ARM64) and builds for amd64 (Harness Cloud compatibility)
@@ -69,6 +73,155 @@ print_section() {
   echo "----------------------------------------"
 }
 
+# Detect Operating System and Architecture
+print_section "Detecting Platform"
+
+OS_TYPE="unknown"
+ARCH=$(uname -m)
+
+case "$(uname -s)" in
+  Darwin*)
+    OS_TYPE="macos"
+    print_status "Operating System: macOS"
+    ;;
+  Linux*)
+    OS_TYPE="linux"
+    print_status "Operating System: Linux"
+    ;;
+  MINGW*|MSYS*|CYGWIN*)
+    OS_TYPE="windows"
+    print_status "Operating System: Windows"
+    ;;
+  *)
+    print_error "Unknown operating system: $(uname -s)"
+    exit 1
+    ;;
+esac
+
+print_info "Architecture: $ARCH"
+
+# Check for required Kubernetes tool based on OS and architecture
+print_section "Checking Kubernetes Tool"
+
+K8S_TOOL_MISSING=false
+RECOMMENDED_TOOL=""
+
+if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
+  # Apple Silicon Mac - require Colima for AMD64 emulation via Rosetta 2
+  RECOMMENDED_TOOL="Colima"
+  if ! command -v colima &> /dev/null; then
+    print_error "Colima is not installed (required for Apple Silicon Macs)"
+    echo ""
+    echo "Apple Silicon Macs require Colima with Rosetta 2 for AMD64 emulation."
+    echo "This is necessary because Harness Cloud builds AMD64 images."
+    echo ""
+    echo "To install Colima:"
+    echo "  brew install colima docker kubectl"
+    echo ""
+    echo "To start Colima with AMD64 emulation:"
+    echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+    echo ""
+    echo "Note: First startup may take 5-10 minutes while downloading images."
+    echo ""
+    K8S_TOOL_MISSING=true
+  else
+    print_status "Colima is installed"
+    # Check if Colima is running
+    if colima status &> /dev/null; then
+      # Check if running with correct architecture
+      # Note: colima status outputs to stderr, so we need 2>&1
+      COLIMA_ARCH=$(colima status 2>&1 | grep "arch:" | sed 's/.*msg="arch: //' | sed 's/".*//')
+      if [ "$COLIMA_ARCH" = "x86_64" ] || [ "$COLIMA_ARCH" = "amd64" ]; then
+        print_status "Colima is running with AMD64 emulation (Rosetta 2)"
+      else
+        print_error "Colima is running but not with AMD64 architecture (currently: $COLIMA_ARCH)"
+        echo ""
+        echo "Please stop Colima and restart with AMD64 emulation:"
+        echo "  colima stop"
+        echo "  colima delete"
+        echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+        echo ""
+        K8S_TOOL_MISSING=true
+      fi
+    else
+      print_info "Colima is not running"
+      echo ""
+      echo "Please start Colima with AMD64 emulation:"
+      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+      echo ""
+      echo "Note: First startup may take 5-10 minutes."
+      echo ""
+      K8S_TOOL_MISSING=true
+    fi
+  fi
+elif [ "$OS_TYPE" = "windows" ]; then
+  # Windows - recommend minikube but allow other options
+  RECOMMENDED_TOOL="minikube"
+  if ! command -v minikube &> /dev/null; then
+    print_info "minikube is not installed (recommended for Windows)"
+    echo ""
+    echo "For Windows, we recommend minikube for running Kubernetes locally."
+    echo ""
+    echo "To install minikube:"
+    echo "  Visit: https://minikube.sigs.k8s.io/docs/start/"
+    echo ""
+    echo "Alternative options:"
+    echo "  - Docker Desktop with Kubernetes enabled"
+    echo "  - Rancher Desktop with Kubernetes enabled"
+    echo ""
+    read -p "Do you have Docker Desktop or Rancher Desktop with Kubernetes? [y/N]: " HAS_ALTERNATIVE
+    if [[ ! "$HAS_ALTERNATIVE" =~ ^[Yy]$ ]]; then
+      print_error "No Kubernetes tool detected. Please install one of the options above."
+      K8S_TOOL_MISSING=true
+    else
+      print_info "Proceeding with alternative Kubernetes tool"
+    fi
+  else
+    print_status "minikube is installed"
+  fi
+else
+  # macOS Intel or Linux - flexible options
+  if [ "$OS_TYPE" = "macos" ]; then
+    RECOMMENDED_TOOL="minikube, Colima, Docker Desktop, or Rancher Desktop"
+  else
+    RECOMMENDED_TOOL="minikube or your preferred K8s distribution"
+  fi
+
+  # Check for common tools
+  if command -v minikube &> /dev/null; then
+    print_status "minikube is installed"
+  elif command -v colima &> /dev/null; then
+    print_status "Colima is installed"
+  elif kubectl config current-context 2>/dev/null | grep -q "docker-desktop"; then
+    print_status "Docker Desktop with Kubernetes detected"
+  elif kubectl config current-context 2>/dev/null | grep -q "rancher-desktop"; then
+    print_status "Rancher Desktop detected"
+  else
+    print_info "No common Kubernetes tool detected"
+    echo ""
+    echo "Please ensure you have one of the following installed and running:"
+    echo "  - minikube: https://minikube.sigs.k8s.io/docs/start/"
+    echo "  - Colima: brew install colima"
+    echo "  - Docker Desktop: https://www.docker.com/products/docker-desktop/"
+    echo "  - Rancher Desktop: https://rancherdesktop.io/"
+    echo ""
+    read -p "Do you have Kubernetes running with kubectl configured? [y/N]: " HAS_K8S
+    if [[ ! "$HAS_K8S" =~ ^[Yy]$ ]]; then
+      print_error "No Kubernetes tool detected. Please install one of the options above."
+      K8S_TOOL_MISSING=true
+    else
+      print_info "Proceeding with your Kubernetes setup"
+    fi
+  fi
+fi
+
+if [ "$K8S_TOOL_MISSING" = true ]; then
+  print_error "Required Kubernetes tool not found: $RECOMMENDED_TOOL"
+  echo ""
+  print_info "Setup instructions: see README.md or CLAUDE.md for platform-specific setup"
+  exit 1
+fi
+
 # Check prerequisites
 print_section "Checking Prerequisites"
 
@@ -97,12 +250,32 @@ print_status "Docker daemon is running"
 print_section "Detecting Kubernetes Environment"
 
 K8S_TYPE=""
-if kubectl config current-context 2>/dev/null | grep -q "minikube"; then
+if kubectl config current-context 2>/dev/null | grep -q "colima"; then
+  K8S_TYPE="colima"
+  print_status "Detected Colima"
+  # Verify architecture for Colima on Apple Silicon
+  if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
+    CLUSTER_ARCH=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.architecture}' 2>/dev/null)
+    if [ "$CLUSTER_ARCH" = "amd64" ]; then
+      print_status "Cluster is running AMD64 (correct for Harness Cloud compatibility)"
+    else
+      print_error "Cluster is running $CLUSTER_ARCH architecture (expected amd64)"
+      echo ""
+      echo "Please restart Colima with AMD64 emulation:"
+      echo "  colima stop && colima delete"
+      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+      exit 1
+    fi
+  fi
+elif kubectl config current-context 2>/dev/null | grep -q "minikube"; then
   K8S_TYPE="minikube"
   print_status "Detected minikube"
 elif kubectl config current-context 2>/dev/null | grep -q "rancher-desktop"; then
   K8S_TYPE="rancher-desktop"
   print_status "Detected Rancher Desktop"
+elif kubectl config current-context 2>/dev/null | grep -q "docker-desktop"; then
+  K8S_TYPE="docker-desktop"
+  print_status "Detected Docker Desktop"
 else
   # Try to connect to see if any cluster is available
   if kubectl cluster-info &> /dev/null; then
@@ -111,10 +284,31 @@ else
   else
     print_error "No Kubernetes cluster detected."
     echo ""
-    echo "Please ensure one of the following is running:"
-    echo "  - Rancher Desktop with Kubernetes enabled"
-    echo "  - minikube (run 'minikube start')"
+    if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
+      echo "For Apple Silicon Macs, start Colima:"
+      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+    else
+      echo "Please ensure one of the following is running:"
+      echo "  - minikube (run 'minikube start')"
+      echo "  - Colima (run 'colima start --kubernetes')"
+      echo "  - Rancher Desktop with Kubernetes enabled"
+      echo "  - Docker Desktop with Kubernetes enabled"
+    fi
     exit 1
+  fi
+fi
+
+# Start Colima if needed
+if [ "$K8S_TYPE" = "colima" ]; then
+  # Colima should already be running if we got here, but verify
+  if ! colima status &> /dev/null; then
+    print_info "Starting Colima (this may take 5-10 minutes on first run)..."
+    if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
+      colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes
+    else
+      colima start --cpu 4 --memory 8 --kubernetes
+    fi
+    print_status "Colima started successfully"
   fi
 fi
 
@@ -385,11 +579,45 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
       print_info "Logging in to Docker Hub as $DOCKER_USERNAME..."
     fi
 
-    if echo "$DOCKER_LOGIN_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin; then
+    # Attempt Docker login and capture any errors
+    LOGIN_OUTPUT=$(echo "$DOCKER_LOGIN_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1)
+    LOGIN_EXIT_CODE=$?
+
+    if [ $LOGIN_EXIT_CODE -eq 0 ]; then
       print_status "Successfully logged in to Docker Hub"
     else
-      print_error "Docker login failed. Please check your credentials and try again."
-      exit 1
+      # Check if it's a credential helper error
+      if echo "$LOGIN_OUTPUT" | grep -q "docker-credential.*executable file not found"; then
+        print_info "Docker credential helper not found, configuring direct credential storage..."
+
+        # Backup existing Docker config if it exists
+        if [ -f ~/.docker/config.json ]; then
+          cp ~/.docker/config.json ~/.docker/config.json.backup.$(date +%s) 2>/dev/null || true
+        fi
+
+        # Create or update Docker config to not use credential helper
+        mkdir -p ~/.docker
+        if [ -f ~/.docker/config.json ]; then
+          # Remove credsStore from existing config
+          cat ~/.docker/config.json | grep -v '"credsStore"' > ~/.docker/config.json.tmp
+          mv ~/.docker/config.json.tmp ~/.docker/config.json
+        else
+          echo '{}' > ~/.docker/config.json
+        fi
+
+        # Retry Docker login
+        print_info "Retrying Docker login..."
+        if echo "$DOCKER_LOGIN_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1; then
+          print_status "Successfully logged in to Docker Hub"
+        else
+          print_error "Docker login failed. Please check your credentials."
+          exit 1
+        fi
+      else
+        print_error "Docker login failed: $LOGIN_OUTPUT"
+        print_error "Please check your credentials and try again."
+        exit 1
+      fi
     fi
 
     # Save credentials to config file for future runs (only if file doesn't exist yet)
