@@ -25,7 +25,27 @@ On the **Service** tab:
 
 1. Click **Select Service** (not "Add Service" - it already exists!)
 2. Select **backend** (this was pre-configured by Terraform)
-3. Click **Continue**
+3. **CRITICAL**: Click on the **backend** service name to edit it
+4. Navigate to the **Artifacts** section
+5. Click **Edit** (pencil icon) on the artifact source
+6. Update the **Image Path**:
+   - Change from: `dockerhubaccountid/harness-demo`
+   - Change to: `YOUR_DOCKERHUB_USERNAME/harness-demo`
+   - ⚠️ **Replace `YOUR_DOCKERHUB_USERNAME` with your actual Docker Hub username**
+7. Verify the **Tag** is set to: `backend-latest`
+8. Click **Submit** to save the artifact changes
+9. Click **Save** to save the service
+10. Click **Continue** to proceed to the Environment tab
+
+> **⚠️ IMPORTANT - Update Docker Hub Account**:
+>
+> **You MUST update the Image Path** to point to YOUR Docker Hub account, otherwise the deployment will fail with an "image not found" error.
+>
+> The Terraform configuration creates the backend service with a placeholder `dockerhubaccountid`. Since the start-demo.sh script pushed your backend image to YOUR Docker Hub account, you need to update this path to match.
+>
+> **Example**:
+> - If your Docker Hub username is `johndoe`, change the Image Path to: `johndoe/harness-demo`
+> - Keep the tag as: `backend-latest`
 
 > **About the Backend Service Template**:
 >
@@ -40,7 +60,7 @@ On the **Service** tab:
 > **Docker Artifact Configuration**:
 > - **Artifact Source**: Docker Registry
 > - **Connector**: `workshop-docker` (reusing the connector from the frontend)
-> - **Image Path**: `dockerhubaccountid/harness-demo`
+> - **Image Path**: `YOUR_DOCKERHUB_USERNAME/harness-demo` (you just updated this!)
 > - **Tag**: `backend-latest`
 > - This points to the backend Docker image you built during setup
 >
@@ -135,9 +155,12 @@ You should now see:
 
 ### Test the Application
 
-**Ensure minikube tunnel is running** (if using minikube):
+**With Colima (Apple Silicon Macs) or Rancher Desktop:**
+- Services are automatically accessible at http://localhost:8080
+
+**With minikube:**
 ```bash
-# In a separate terminal
+# Ensure minikube tunnel is running in a separate terminal
 minikube tunnel
 ```
 
