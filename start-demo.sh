@@ -136,22 +136,44 @@ if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]
       else
         print_error "Colima is running but not with AMD64 architecture (currently: $COLIMA_ARCH)"
         echo ""
-        echo "Please stop Colima and restart with AMD64 emulation:"
-        echo "  colima stop"
-        echo "  colima delete"
+        echo "Colima must be restarted with AMD64 emulation."
+        echo "This requires stopping and recreating the Colima VM."
+        echo ""
+        read -p "Stop and restart Colima with AMD64 emulation? [Y/n]: " RESTART_COLIMA
+        RESTART_COLIMA=${RESTART_COLIMA:-yes}
+
+        if [[ "$RESTART_COLIMA" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+          print_info "Stopping Colima..."
+          colima stop
+          print_info "Deleting Colima VM..."
+          colima delete
+          print_info "Starting Colima with AMD64 emulation (this may take 5-10 minutes)..."
+          colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes
+          print_status "Colima started successfully with AMD64 emulation"
+        else
+          print_error "Cannot proceed without AMD64 architecture"
+          echo ""
+          echo "To restart manually:"
+          echo "  colima stop && colima delete"
+          echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+          echo ""
+          K8S_TOOL_MISSING=true
+        fi
+      fi
+    else
+      print_info "Colima is not running - starting it now..."
+      echo ""
+      print_info "Starting Colima with AMD64 emulation (this may take 5-10 minutes on first run)..."
+      if colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes; then
+        print_status "Colima started successfully"
+      else
+        print_error "Failed to start Colima"
+        echo ""
+        echo "Please try starting manually:"
         echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
         echo ""
         K8S_TOOL_MISSING=true
       fi
-    else
-      print_info "Colima is not running"
-      echo ""
-      echo "Please start Colima with AMD64 emulation:"
-      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
-      echo ""
-      echo "Note: First startup may take 5-10 minutes."
-      echo ""
-      K8S_TOOL_MISSING=true
     fi
   fi
 elif [ "$OS_TYPE" = "windows" ]; then
