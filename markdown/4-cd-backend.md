@@ -28,10 +28,8 @@ On the **Service** tab:
 3. **CRITICAL**: Click on the **backend** service name to edit it
 4. Navigate to the **Artifacts** section
 5. Click **Edit** (pencil icon) on the artifact source
-6. Update the **Image Path**:
-   - Change from: `dockerhubaccountid/harness-demo`
-   - Change to: `YOUR_DOCKERHUB_USERNAME/harness-demo`
-   - ⚠️ **Replace `YOUR_DOCKERHUB_USERNAME` with your actual Docker Hub username**
+6. Update the **Image Path** to: `dockerhubaccountid/harness-demo`
+   - ⚠️ **The Terraform-created service has a placeholder - update it with your Docker Hub username**
 7. Verify the **Tag** is set to: `backend-latest`
 8. Click **Submit** to save the artifact changes
 9. Click **Save** to save the service
@@ -39,12 +37,12 @@ On the **Service** tab:
 
 > **⚠️ IMPORTANT - Update Docker Hub Account**:
 >
-> **You MUST update the Image Path** to point to YOUR Docker Hub account, otherwise the deployment will fail with an "image not found" error.
+> **You MUST update the Image Path** to use your Docker Hub username, otherwise the deployment will fail with an "image not found" error.
 >
-> The Terraform configuration creates the backend service with a placeholder `dockerhubaccountid`. Since the start-demo.sh script pushed your backend image to YOUR Docker Hub account, you need to update this path to match.
+> The Terraform configuration creates the backend service with a placeholder that needs to be replaced with your actual Docker Hub username. The start-demo.sh script pushed your backend image to your Docker Hub account, so the service needs to point there.
 >
-> **Example**:
-> - If your Docker Hub username is `johndoe`, change the Image Path to: `johndoe/harness-demo`
+> **What to change**:
+> - Update the Image Path to: `dockerhubaccountid/harness-demo`
 > - Keep the tag as: `backend-latest`
 
 > **About the Backend Service Template**:
@@ -60,7 +58,7 @@ On the **Service** tab:
 > **Docker Artifact Configuration**:
 > - **Artifact Source**: Docker Registry
 > - **Connector**: `workshop-docker` (reusing the connector from the frontend)
-> - **Image Path**: `YOUR_DOCKERHUB_USERNAME/harness-demo` (you just updated this!)
+> - **Image Path**: `dockerhubaccountid/harness-demo` (you just updated this!)
 > - **Tag**: `backend-latest`
 > - This points to the backend Docker image you built during setup
 >

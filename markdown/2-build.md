@@ -99,7 +99,6 @@ If you do not wish to use Harness Cloud, you can use your local Kubernetes clust
    - Expand the `Optional Configuration`
    - **Container Registry**: `Workshop Docker`
    - **Image**: `dockerhubaccountid/harness-demo:test-latest`
-     - ⚠️ Replace `dockerhubaccountid` with YOUR Docker Hub username
      - ⚠️ Use `test-latest` tag (NOT `backend-latest`) - this image has pytest pre-installed
 
 4. Click **Apply Changes**
@@ -163,7 +162,6 @@ If you do not wish to use Harness Cloud, you can use your local Kubernetes clust
    - **Name**: `Push to Dockerhub`
    - **Docker Connector**: `Workshop Docker` (created by Terraform)
    - **Docker Repository**: `dockerhubaccountid/harness-demo`
-     - ⚠️ Replace `dockerhubaccountid` with YOUR Docker Hub username
    - **Tags**: Click **+ Add**
      - Add: `demo-base-<+pipeline.sequenceId>`
      - Change field type to **Expression** using the icon

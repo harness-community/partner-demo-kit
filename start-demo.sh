@@ -1109,6 +1109,16 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
   else
     print_error "Documentation deployment failed (non-critical)"
   fi
+
+  # Restore original docs deployment file (undo personalization to keep git clean)
+  print_info "Restoring original deployment file..."
+  if command -v git &> /dev/null && git rev-parse --git-dir > /dev/null 2>&1; then
+    git checkout -- harness-deploy/docs/docs-deployment.yaml 2>/dev/null || true
+  else
+    # Fallback: manually restore using sed
+    sed -i.bak "s/$DOCKER_USERNAME/dockerhubaccountid/g" harness-deploy/docs/docs-deployment.yaml
+    rm harness-deploy/docs/docs-deployment.yaml.bak 2>/dev/null
+  fi
 fi
 
 # Display next steps

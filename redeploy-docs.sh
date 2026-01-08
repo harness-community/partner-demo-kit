@@ -49,6 +49,46 @@ else
   print_status "Detected other Kubernetes environment"
 fi
 
+# Get Docker Hub username for personalization
+print_section "Preparing Documentation"
+
+CONFIG_FILE=".demo-config"
+DOCKER_USERNAME=""
+
+if [ -f "$CONFIG_FILE" ]; then
+  # Load Docker username from config
+  DOCKER_USERNAME=$(grep "DOCKER_USERNAME=" "$CONFIG_FILE" | cut -d'=' -f2)
+  print_status "Using Docker Hub username from config: $DOCKER_USERNAME"
+else
+  print_info "No config file found, documentation will use placeholder 'dockerhubaccountid'"
+fi
+
+# Personalize markdown files if we have a username
+if [ -n "$DOCKER_USERNAME" ]; then
+  print_info "Personalizing documentation with your Docker Hub username..."
+
+  # Copy images into markdown directory for Docker build context
+  if [ -d "images" ]; then
+    cp -r images markdown/ 2>/dev/null || true
+  fi
+
+  # Replace dockerhubaccountid placeholder with actual username in markdown files
+  if command -v sed &> /dev/null; then
+    for mdfile in markdown/*.md; do
+      if [ -f "$mdfile" ]; then
+        # Use different sed syntax for macOS vs Linux
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+          sed -i '.bak' "s/dockerhubaccountid/$DOCKER_USERNAME/g" "$mdfile"
+          rm -f "${mdfile}.bak"
+        else
+          sed -i "s/dockerhubaccountid/$DOCKER_USERNAME/g" "$mdfile"
+        fi
+      fi
+    done
+    print_status "Documentation personalized with: $DOCKER_USERNAME"
+  fi
+fi
+
 # Build the Docker image
 print_section "Building Docker Image"
 
@@ -62,10 +102,35 @@ if docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -t ${IMAGE_NAME}:latest .; then
   print_status "Docker image built successfully"
 else
   print_error "Docker build failed"
+  cd ..
+  # Restore markdown files before exiting
+  if [ -n "$DOCKER_USERNAME" ] && command -v git &> /dev/null && git rev-parse --git-dir > /dev/null 2>&1; then
+    git checkout -- markdown/*.md 2>/dev/null || true
+  fi
   exit 1
 fi
 
 cd ..
+
+# Restore original markdown files (undo personalization to keep git clean)
+if [ -n "$DOCKER_USERNAME" ]; then
+  print_info "Restoring original documentation files..."
+  if command -v git &> /dev/null && git rev-parse --git-dir > /dev/null 2>&1; then
+    git checkout -- markdown/*.md 2>/dev/null || true
+  else
+    # Fallback: manually restore using sed
+    for mdfile in markdown/*.md; do
+      if [ -f "$mdfile" ]; then
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+          sed -i '.bak' "s/$DOCKER_USERNAME/dockerhubaccountid/g" "$mdfile"
+          rm -f "${mdfile}.bak"
+        else
+          sed -i "s/$DOCKER_USERNAME/dockerhubaccountid/g" "$mdfile"
+        fi
+      fi
+    done
+  fi
+fi
 
 # Load image into cluster (minikube only)
 if [ "$K8S_TYPE" = "minikube" ]; then

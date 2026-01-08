@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: docs
-        image: degas1980/harness-demo:docs-latest
+        image: dockerhubaccountid/harness-demo:docs-latest
         ports:
         - containerPort: 80
         resources:

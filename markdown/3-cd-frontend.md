@@ -55,7 +55,6 @@ On the **Service** tab:
 4. **Artifact Location**:
    - **Artifact Source Identifier**: `frontend`
    - **Image Path**: `dockerhubaccountid/harness-demo`
-     - ⚠️ Replace `dockerhubaccountid` with YOUR Docker Hub username
    - **Tag**: `demo-base-<+pipeline.sequenceId>`
      - Change the field type to **Expression** (click the icon)
 5. Click **Submit**
