@@ -4,7 +4,7 @@
 
 ## 🚀 Welcome
 
-This demo kit showcases the complete Harness platform including CI/CD, Code Repository, Continuous Verification, and Security Testing. Everything runs on your local Kubernetes cluster (minikube or Rancher Desktop) to minimize external dependencies.
+This demo kit showcases the complete Harness platform including CI/CD, Code Repository, Continuous Verification, and Security Testing. Everything runs on your local Kubernetes cluster (Colima for Apple Silicon, minikube, or Rancher Desktop) to minimize external dependencies.
 
 **All resources are created in a "Base Demo" project**, keeping demo resources segregated from production environments.
 
@@ -98,7 +98,7 @@ Enforce governance policies across your deployments using Open Policy Agent.
 
 - **Frontend:** Angular 17, TypeScript, Harness Feature Flags SDK
 - **Backend:** Django 5.0, Python, PostgreSQL
-- **Infrastructure:** Kubernetes (minikube/Rancher Desktop), Prometheus
+- **Infrastructure:** Kubernetes (Colima/minikube/Rancher Desktop), Prometheus
 - **IaC:** Terraform for Harness resource provisioning
 
 ## 📖 Quick Links

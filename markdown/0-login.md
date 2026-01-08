@@ -39,6 +39,7 @@ Before starting, ensure you have:
    - Terraform installed
    - kubectl and helm installed
    - Git client installed
+   - **Windows Users**: Git Bash (included with Git for Windows) or WSL2 required to run setup scripts
 
 3. **Docker Hub Account**
    - Docker Hub account created
@@ -65,6 +66,8 @@ The script will prompt you for:
 - Docker Hub username and password
 
 > **Tip**: The script saves your configuration to `.demo-config` for future runs, so you won't need to re-enter credentials.
+
+> **Note**: The setup script automatically personalizes the lab documentation with your Docker Hub username. Throughout the labs, when you see instructions referring to your Docker Hub images (e.g., `yourusername/harness-demo`), these will show your actual Docker Hub username instead of a placeholder like `dockerhubaccountid`. This personalization happens when the documentation is built and deployed to your local Kubernetes cluster.
 
 **3. Wait for completion:**
 The script may take several minutes to complete depending on the machine being used. Watch for the success message indicating all resources were created.

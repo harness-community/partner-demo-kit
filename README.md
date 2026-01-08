@@ -88,7 +88,42 @@ This training consists of four progressive sections:
 - **CPU**: 4+ cores recommended
 - **RAM**: 8GB minimum, 16GB recommended
 - **Disk**: 20GB free space
-- **OS**: macOS, Linux, or Windows with WSL2
+- **OS**: macOS, Linux, or Windows (with WSL2 or Git Bash)
+
+### Windows Users - Important Setup Notes
+
+The automation scripts (`start-demo.sh` and `stop-demo.sh`) are bash scripts that require a bash-compatible environment on Windows. You have two options:
+
+**Option 1: Git Bash (Recommended for Simplicity)**
+- Install [Git for Windows](https://git-scm.com/download/win) which includes Git Bash
+- Install Docker Desktop, kubectl, helm, and Terraform **in Windows** (not WSL)
+- Run all commands in Git Bash terminal
+- Docker Desktop's Kubernetes integration works seamlessly
+- ✅ **Pros**: Simpler setup, native Windows Docker performance
+- ⚠️ **Note**: Some Unix commands may have limited functionality
+
+**Option 2: WSL2 (Recommended for Advanced Users)**
+- Install [Windows Subsystem for Linux 2 (WSL2)](https://docs.microsoft.com/en-us/windows/wsl/install)
+- Install Docker Desktop for Windows with WSL2 integration enabled
+- Install kubectl, helm, and Terraform **inside WSL** using Linux package managers
+- Run all commands in WSL terminal (Ubuntu, Debian, etc.)
+- ✅ **Pros**: Full Linux compatibility, better for complex workflows
+- ⚠️ **Networking**: WSL2 localhost forwarding handles port access automatically
+- ⚠️ **Paths**: Use Linux paths (`/home/user/`) not Windows paths (`C:\Users\`)
+
+**Kubernetes Options for Windows:**
+- **minikube** (recommended by the script) - Works with both Git Bash and WSL2
+- **Docker Desktop** - Enable Kubernetes in settings (Settings > Kubernetes > Enable Kubernetes)
+- **Rancher Desktop** - Alternative to Docker Desktop with built-in Kubernetes
+
+**Verification:**
+After choosing your approach, verify your bash environment works:
+```bash
+# In Git Bash or WSL terminal
+bash --version    # Should show bash version
+docker --version  # Should show Docker version
+kubectl version   # Should show kubectl version
+```
 
 ## Quick Start Guide
 

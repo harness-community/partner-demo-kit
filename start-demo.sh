@@ -90,7 +90,8 @@ case "$(uname -s)" in
     ;;
   MINGW*|MSYS*|CYGWIN*)
     OS_TYPE="windows"
-    print_status "Operating System: Windows"
+    print_status "Operating System: Windows (Git Bash/MSYS/Cygwin)"
+    print_info "See README.md 'Windows Users' section for setup guidance"
     ;;
   *)
     print_error "Unknown operating system: $(uname -s)"
@@ -752,6 +753,28 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
     cp -r images markdown/ 2>/dev/null || true
   fi
 
+  # Replace dockerhubaccountid placeholder with actual username in markdown files
+  print_info "Personalizing lab documentation with your Docker Hub username..."
+  echo ""
+  echo "   The lab guides will show '$DOCKER_USERNAME/harness-demo' instead of 'dockerhubaccountid/harness-demo'"
+  echo "   This makes the instructions easier to follow with your actual Docker Hub account."
+  echo ""
+  if command -v sed &> /dev/null; then
+    # Create temporary copies with placeholder replaced
+    for mdfile in markdown/*.md; do
+      if [ -f "$mdfile" ]; then
+        # Use different sed syntax for macOS vs Linux
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+          sed -i '.bak' "s/dockerhubaccountid/$DOCKER_USERNAME/g" "$mdfile"
+          rm -f "${mdfile}.bak"
+        else
+          sed -i "s/dockerhubaccountid/$DOCKER_USERNAME/g" "$mdfile"
+        fi
+      fi
+    done
+    print_status "Documentation personalized successfully"
+  fi
+
   cd markdown
   if [ -n "$PUSH_FLAG" ]; then
     # Use buildx with --push for ARM64
@@ -777,6 +800,25 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
     fi
   fi
   cd ..
+
+  # Restore original markdown files (undo personalization to keep git clean)
+  print_info "Restoring original documentation files..."
+  if command -v git &> /dev/null && git rev-parse --git-dir > /dev/null 2>&1; then
+    # Use git to restore original files
+    git checkout -- markdown/*.md 2>/dev/null || true
+  else
+    # Fallback: manually restore using sed
+    for mdfile in markdown/*.md; do
+      if [ -f "$mdfile" ]; then
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+          sed -i '.bak' "s/$DOCKER_USERNAME/dockerhubaccountid/g" "$mdfile"
+          rm -f "${mdfile}.bak"
+        else
+          sed -i "s/$DOCKER_USERNAME/dockerhubaccountid/g" "$mdfile"
+        fi
+      fi
+    done
+  fi
 
   # Now create/update Docker Hub secret with authenticated credentials
   print_section "Updating Docker Hub Secret for Image Pulls"
