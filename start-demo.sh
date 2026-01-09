@@ -110,22 +110,66 @@ RECOMMENDED_TOOL=""
 if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
   # Apple Silicon Mac - require Colima for AMD64 emulation via Rosetta 2
   RECOMMENDED_TOOL="Colima"
+
+  # Check for all required dependencies
+  MISSING_DEPS=""
   if ! command -v colima &> /dev/null; then
-    print_error "Colima is not installed (required for Apple Silicon Macs)"
+    MISSING_DEPS="$MISSING_DEPS colima"
+  fi
+  if ! command -v docker &> /dev/null; then
+    MISSING_DEPS="$MISSING_DEPS docker"
+  fi
+  if ! command -v kubectl &> /dev/null; then
+    MISSING_DEPS="$MISSING_DEPS kubectl"
+  fi
+  if ! brew list qemu &> /dev/null 2>&1; then
+    MISSING_DEPS="$MISSING_DEPS qemu"
+  fi
+  if ! brew list lima-additional-guestagents &> /dev/null 2>&1; then
+    MISSING_DEPS="$MISSING_DEPS lima-additional-guestagents"
+  fi
+
+  if [ -n "$MISSING_DEPS" ]; then
+    print_error "Missing required dependencies for Apple Silicon:$MISSING_DEPS"
     echo ""
     echo "Apple Silicon Macs require Colima with Rosetta 2 for AMD64 emulation."
     echo "This is necessary because Harness Cloud builds AMD64 images."
     echo ""
-    echo "To install Colima:"
-    echo "  brew install colima docker kubectl"
+    echo "To install all required dependencies:"
+    echo "  brew install colima docker kubectl qemu lima-additional-guestagents"
     echo ""
-    echo "To start Colima with AMD64 emulation:"
-    echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
-    echo ""
-    echo "Note: First startup may take 5-10 minutes while downloading images."
-    echo ""
-    K8S_TOOL_MISSING=true
-  else
+
+    # Offer to install missing dependencies
+    read -p "Would you like to install missing dependencies now? [Y/n]: " INSTALL_DEPS
+    INSTALL_DEPS=${INSTALL_DEPS:-yes}
+
+    if [[ "$INSTALL_DEPS" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+      print_info "Installing missing dependencies via Homebrew..."
+      if brew install colima docker kubectl qemu lima-additional-guestagents; then
+        print_status "Dependencies installed successfully"
+        # Check if there's an existing Colima instance that needs to be cleaned up
+        if colima status &> /dev/null; then
+          print_info "Existing Colima instance detected. Stopping and deleting for clean setup..."
+          colima stop
+          colima delete
+        fi
+      else
+        print_error "Failed to install dependencies. Please install manually:"
+        echo "  brew install colima docker kubectl qemu lima-additional-guestagents"
+        K8S_TOOL_MISSING=true
+      fi
+    else
+      echo ""
+      echo "To start Colima with AMD64 emulation after installing dependencies:"
+      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+      echo ""
+      echo "Note: First startup may take 5-10 minutes while downloading images."
+      echo ""
+      K8S_TOOL_MISSING=true
+    fi
+  fi
+
+  if [ "$K8S_TOOL_MISSING" != true ] && command -v colima &> /dev/null; then
     print_status "Colima is installed"
     # Check if Colima is running
     if colima status &> /dev/null; then

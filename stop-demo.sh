@@ -29,6 +29,7 @@ NC='\033[0m' # No Color
 # Configuration
 DELETE_PROMETHEUS=false
 STOP_CLUSTER=false
+DELETE_COLIMA_VM=false
 DELETE_HARNESS_PROJECT=false
 DELETE_DOCKER_REPO=false
 DELETE_CONFIG_FILES=false
@@ -116,7 +117,8 @@ show_cleanup_menu() {
   echo "   - Keeps cluster running and config files"
   echo ""
   echo -e "${CYAN}5)${NC} Complete cleanup (everything including cluster)"
-  echo "   - Same as option 4, but also stops the cluster"
+  echo "   - Same as option 4, plus stops the cluster"
+  echo "   - Option to delete Colima VM for fresh start (Apple Silicon)"
   echo ""
   echo -e "${CYAN}6)${NC} Custom cleanup options"
   echo "   - Choose exactly what to cleanup"
@@ -186,8 +188,16 @@ show_cleanup_menu() {
 
       read -p "Stop Kubernetes cluster (minikube/colima)? [y/N]: " STOP_CLUSTER_CHOICE
       STOP_CLUSTER=false
+      DELETE_COLIMA_VM=false
       if [[ "$STOP_CLUSTER_CHOICE" =~ ^[Yy]$ ]]; then
         STOP_CLUSTER=true
+        # Ask about deleting Colima VM on Apple Silicon
+        if [ "$(uname -m)" = "arm64" ] || [ "$(uname -m)" = "aarch64" ]; then
+          read -p "Also delete Colima VM for fresh start? [y/N]: " DELETE_VM_CHOICE
+          if [[ "$DELETE_VM_CHOICE" =~ ^[Yy]$ ]]; then
+            DELETE_COLIMA_VM=true
+          fi
+        fi
       fi
 
       read -p "Delete Harness 'Base Demo' project? [y/N]: " DELETE_HARNESS_CHOICE
@@ -912,6 +922,28 @@ if [ "$STOP_CLUSTER" = true ] && [ "$K8S_AVAILABLE" = true ]; then
     print_info "Stopping Colima cluster..."
     colima stop
     print_status "Colima stopped"
+
+    # Delete Colima VM if requested (from custom menu or complete cleanup)
+    if [ "$DELETE_COLIMA_VM" = true ]; then
+      print_info "Deleting Colima VM..."
+      colima delete -f
+      print_status "Colima VM deleted"
+      echo ""
+      print_info "To start fresh, run: colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+    elif [ "$DELETE_HARNESS_PROJECT" = true ] && [ "$DELETE_PROMETHEUS" = true ]; then
+      # For complete cleanup (option 5), offer to delete the Colima VM
+      echo ""
+      read -p "Delete Colima VM for a completely fresh start? [Y/n]: " DELETE_VM_PROMPT
+      DELETE_VM_PROMPT=${DELETE_VM_PROMPT:-yes}
+
+      if [[ "$DELETE_VM_PROMPT" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+        print_info "Deleting Colima VM..."
+        colima delete -f
+        print_status "Colima VM deleted"
+        echo ""
+        print_info "To start fresh, run: colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+      fi
+    fi
   elif [ "$K8S_TYPE" = "minikube" ]; then
     print_section "Stopping minikube"
 

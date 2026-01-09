@@ -205,8 +205,12 @@ The IaC configuration creates a "Base Demo" project with:
 
 **Apple Silicon (M1/M2/M3/M4) - Colima with Rosetta 2 (REQUIRED):**
 ```bash
-# Install Colima
-brew install colima docker kubectl
+# Install Colima and all required dependencies
+brew install colima docker kubectl qemu lima-additional-guestagents
+
+# If you have an existing Colima instance, delete it first (recommended for clean setup)
+colima stop
+colima delete
 
 # Start Colima with AMD64 emulation via Rosetta 2
 colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes
