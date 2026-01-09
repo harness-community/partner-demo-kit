@@ -237,11 +237,16 @@
         </tr>
         <tr>
           <td><strong>Kubernetes</strong></td>
-          <td>Deployment platform (choose one)</td>
+          <td>Deployment platform</td>
           <td>
-            <a href="https://rancherdesktop.io/" target="_blank">Rancher Desktop</a> (recommended) or
-            <a href="https://minikube.sigs.k8s.io/docs/start/" target="_blank">minikube</a>
+            <strong>Apple Silicon (M1/M2/M3/M4):</strong> <a href="https://github.com/abiosoft/colima" target="_blank">Colima</a> (REQUIRED)<br>
+            <strong>Intel Mac/Windows/Linux:</strong> <a href="https://minikube.sigs.k8s.io/docs/start/" target="_blank">minikube</a>, <a href="https://rancherdesktop.io/" target="_blank">Rancher Desktop</a>, or Docker Desktop
           </td>
+        </tr>
+        <tr>
+          <td><strong>qemu + lima-additional-guestagents</strong></td>
+          <td>VM emulation (Apple Silicon only)</td>
+          <td><code>brew install qemu lima-additional-guestagents</code></td>
         </tr>
         <tr>
           <td><strong>kubectl</strong></td>
@@ -260,6 +265,14 @@
         </tr>
       </tbody>
     </table>
+
+    <div class="callout callout-warning">
+      <h3>🍎 Apple Silicon Mac Users (M1/M2/M3/M4)</h3>
+      <p>Apple Silicon Macs <strong>require Colima</strong> with Rosetta 2 for AMD64 emulation. This is necessary because Harness Cloud builds AMD64 images.</p>
+      <p>Install all required dependencies:</p>
+      <pre><code>brew install colima docker kubectl qemu lima-additional-guestagents</code></pre>
+      <p>The <code>start-demo.sh</code> script will detect missing dependencies and offer to install them automatically.</p>
+    </div>
 
     <h3>Required Accounts</h3>
 
@@ -347,13 +360,14 @@ cd partner-demo-kit</code></pre>
       <h3>✨ What Happens During Setup</h3>
       <p>The <code>start-demo.sh</code> script performs these operations automatically:</p>
       <ol>
-        <li><strong>Prerequisites Check</strong> - Verifies Docker, kubectl, Terraform are installed</li>
-        <li><strong>Kubernetes Detection & Startup</strong> - Detects and starts your K8s cluster (minikube/Rancher Desktop)</li>
+        <li><strong>Prerequisites Check</strong> - Verifies Docker, kubectl, Terraform are installed; on Apple Silicon, also checks for Colima, qemu, and lima-additional-guestagents</li>
+        <li><strong>Dependency Installation</strong> - Offers to install missing dependencies via Homebrew (Apple Silicon)</li>
+        <li><strong>Kubernetes Detection & Startup</strong> - Detects and starts your K8s cluster (Colima for Apple Silicon, minikube/Rancher Desktop for others)</li>
+        <li><strong>Architecture Verification</strong> - Ensures AMD64 emulation is enabled (Apple Silicon)</li>
         <li><strong>Docker Hub Secret Creation</strong> - Creates <code>dockerhub-pull</code> secret in Kubernetes</li>
         <li><strong>Prometheus Deployment</strong> - Deploys monitoring to the <code>monitoring</code> namespace</li>
         <li><strong>Docker Authentication</strong> - Logs into Docker Hub (uses existing session if available)</li>
-        <li><strong>Architecture Detection</strong> - Identifies your CPU architecture (Intel/AMD vs Apple Silicon)</li>
-        <li><strong>Image Building</strong> - Builds backend and test images with correct platform settings</li>
+        <li><strong>Image Building</strong> - Builds backend, test, and docs images with correct platform settings</li>
         <li><strong>Credential Collection</strong> - Prompts for Harness and Docker credentials (cached for subsequent runs)</li>
         <li><strong>Terraform Configuration</strong> - Updates <code>kit/se-parms.tfvars</code> automatically</li>
         <li><strong>Resource Provisioning</strong> - Runs Terraform to create all Harness resources</li>
@@ -411,19 +425,44 @@ kubectl get pods -n monitoring</code></pre>
 # Visit https://hub.docker.com/r/YOUR-USERNAME/harness-demo/tags
 # You should see: backend-latest and test-latest tags</code></pre>
 
-    <h4>Access Documentation</h4>
-    <p>Open <a href="http://localhost:30001" target="_blank">http://localhost:30001</a> to access the lab guides deployed to your cluster.</p>
+    <h4>Demo Access URLs</h4>
+    <p>Once setup completes, access the demo at these URLs:</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Service</th>
+          <th>URL</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Lab Documentation</strong></td>
+          <td><a href="http://localhost:30001" target="_blank">http://localhost:30001</a></td>
+          <td>Interactive lab guides for the demo walkthrough</td>
+        </tr>
+        <tr>
+          <td><strong>Demo Application</strong></td>
+          <td><a href="http://localhost:8080" target="_blank">http://localhost:8080</a></td>
+          <td>Frontend web application (after deployment)</td>
+        </tr>
+        <tr>
+          <td><strong>Harness UI</strong></td>
+          <td><a href="https://app.harness.io" target="_blank">https://app.harness.io</a></td>
+          <td>Harness platform - select "Base Demo" project</td>
+        </tr>
+      </tbody>
+    </table>
 
     <div class="callout callout-tip">
-      <h3>💡 Browser Workspace Setup</h3>
-      <p>For the best lab experience, set up your browser workspace now:</p>
+      <h3>💡 Recommended: Chrome Split Tab View</h3>
+      <p>For the best lab experience, use Chrome's <strong>split tab view</strong> or two browser windows side-by-side:</p>
       <ul>
-        <li><strong>Recommended:</strong> Use Chrome with <strong>split tabs</strong> or <strong>two separate Chrome windows</strong></li>
-        <li><strong>Window 1:</strong> Lab documentation at <code>http://localhost:30001</code></li>
-        <li><strong>Window 2:</strong> Harness UI at <code>https://app.harness.io</code></li>
-        <li><strong>Alternative:</strong> If you have a second monitor, display lab guides on one screen and Harness UI on the other</li>
+        <li><strong>Left side:</strong> Harness UI at <code>https://app.harness.io</code></li>
+        <li><strong>Right side:</strong> Lab documentation at <code>http://localhost:30001</code></li>
       </ul>
-      <p>This allows you to reference instructions while working in Harness without constantly switching tabs.</p>
+      <p>This allows you to follow the lab instructions while working in Harness without constantly switching tabs.</p>
+      <p><strong>How to enable Chrome split tabs:</strong> Open both URLs in Chrome tabs, then right-click on either tab and select <strong>"Move tab to new window with side-by-side"</strong> (Chrome 135+).</p>
     </div>
 
     <h3><span class="step-number">7</span> Generate Code Repository Credentials</h3>
@@ -510,32 +549,54 @@ kubectl get pods -n monitoring</code></pre>
     <h2>Cleanup and Reset</h2>
 
     <h3>Using stop-demo.sh</h3>
-    <p>When you're done with the demo or need to reset, use the <code>stop-demo.sh</code> script:</p>
+    <p>When you're done with the demo or need to reset, use the <code>stop-demo.sh</code> script. Running it without arguments shows an <strong>interactive menu</strong>:</p>
 
-    <h4>Basic Cleanup (Remove Deployed Apps)</h4>
     <pre><code>./stop-demo.sh</code></pre>
 
-    <h4>Full Cleanup (Everything)</h4>
-    <pre><code>./stop-demo.sh --full-cleanup</code></pre>
+    <h4>Interactive Menu Options</h4>
+    <table>
+      <thead>
+        <tr>
+          <th>Option</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1) Minimal cleanup</strong> (default)</td>
+          <td>Stop K8s deployments only - preserves Harness resources for easy restart</td>
+        </tr>
+        <tr>
+          <td><strong>2) Stop deployments + Prometheus</strong></td>
+          <td>Also removes Prometheus monitoring</td>
+        </tr>
+        <tr>
+          <td><strong>3) Stop deployments + cluster</strong></td>
+          <td>Stops Colima/minikube - preserves Harness resources</td>
+        </tr>
+        <tr>
+          <td><strong>4) Full cleanup</strong></td>
+          <td>Deletes Harness project and Docker Hub repo - keeps cluster running</td>
+        </tr>
+        <tr>
+          <td><strong>5) Complete cleanup</strong></td>
+          <td>Everything including cluster; option to delete Colima VM (Apple Silicon)</td>
+        </tr>
+        <tr>
+          <td><strong>6) Custom cleanup</strong></td>
+          <td>Choose exactly what to cleanup</td>
+        </tr>
+      </tbody>
+    </table>
 
-    <h4>Selective Cleanup Options</h4>
-    <pre><code># Also remove Prometheus
-./stop-demo.sh --delete-prometheus
-
-# Also stop Kubernetes cluster (minikube only)
-./stop-demo.sh --stop-cluster
-
-# Delete Harness "Base Demo" project via API
-./stop-demo.sh --delete-harness-project
-
-# Delete Docker Hub repository via API
-./stop-demo.sh --delete-docker-repo
-
-# Delete local config files and Terraform state
-./stop-demo.sh --delete-config-files
-
-# Combine multiple options
-./stop-demo.sh --delete-harness-project --delete-docker-repo --delete-config-files</code></pre>
+    <h4>Command-Line Options (skip menu)</h4>
+    <pre><code># Skip menu with specific options
+./stop-demo.sh --delete-prometheus         # Also remove Prometheus
+./stop-demo.sh --stop-cluster              # Stop Colima/minikube
+./stop-demo.sh --delete-harness-project    # Delete Harness "Base Demo" project
+./stop-demo.sh --delete-docker-repo        # Delete Docker Hub repository
+./stop-demo.sh --delete-config-files       # Delete config and state files
+./stop-demo.sh --full-cleanup              # Everything (stops cluster, keeps credentials)</code></pre>
 
     <div class="callout callout-info">
       <h3>💡 API-Based Cleanup</h3>
@@ -566,8 +627,17 @@ kubectl get pods -n monitoring</code></pre>
 docker buildx build --platform linux/amd64 -t YOUR-USERNAME/harness-demo:backend-latest --push .</code></pre>
 
     <h4>Services not accessible at localhost:8080</h4>
+    <p><strong>Colima:</strong> Services should be automatically accessible. If not, check that Colima is running with <code>colima status</code></p>
     <p><strong>Minikube:</strong> Ensure <code>minikube tunnel</code> is running in a separate terminal</p>
     <p><strong>Rancher Desktop:</strong> Verify Kubernetes is enabled in preferences</p>
+
+    <h4>Colima fails to start (Apple Silicon)</h4>
+    <p><strong>Cause:</strong> Missing dependencies (qemu, lima-additional-guestagents)</p>
+    <p><strong>Solution:</strong> Install all required dependencies:</p>
+    <pre><code>brew install colima docker kubectl qemu lima-additional-guestagents
+colima stop
+colima delete
+colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes</code></pre>
 
     <h4>Prometheus connector fails in Harness</h4>
     <p><strong>Solution:</strong> If the Harness delegate can't reach cluster-local Prometheus:</p>
@@ -579,6 +649,11 @@ docker buildx build --platform linux/amd64 -t YOUR-USERNAME/harness-demo:backend
     </ol>
 
     <h4>Kubernetes cluster won't start</h4>
+    <p><strong>Colima (Apple Silicon):</strong></p>
+    <pre><code># Delete and recreate with AMD64 emulation
+colima stop
+colima delete
+colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes</code></pre>
     <p><strong>Minikube:</strong></p>
     <pre><code># Delete and recreate
 minikube delete
@@ -588,7 +663,10 @@ minikube addons enable metrics-server</code></pre>
 
     <h3>Verification Commands</h3>
     <p>Use these commands to verify your setup:</p>
-    <pre><code># Check Kubernetes
+    <pre><code># Check Colima status (Apple Silicon)
+colima status
+
+# Check Kubernetes
 kubectl cluster-info
 kubectl get nodes
 

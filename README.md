@@ -62,10 +62,10 @@ This training consists of four progressive sections:
 - **Kubernetes** (platform-specific):
   - **macOS (Apple Silicon M1/M2/M3/M4)**: [Colima](https://github.com/abiosoft/colima) (**REQUIRED** for AMD64 emulation via Rosetta 2)
     ```bash
-    brew install colima docker kubectl
+    brew install colima docker kubectl qemu lima-additional-guestagents
     colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes
     ```
-    Note: First startup takes 5-10 minutes. Harness Cloud builds AMD64 images, so AMD64 emulation is required.
+    Note: First startup takes 5-10 minutes. Harness Cloud builds AMD64 images, so AMD64 emulation is required. The `start-demo.sh` script will detect missing dependencies and offer to install them automatically.
   - **macOS (Intel)**: Choose one - [minikube](https://minikube.sigs.k8s.io/docs/start/), [Colima](https://github.com/abiosoft/colima), [Docker Desktop](https://www.docker.com/products/docker-desktop), or [Rancher Desktop](https://rancherdesktop.io/)
   - **Windows**: [minikube](https://minikube.sigs.k8s.io/docs/start/) (recommended), [Docker Desktop](https://www.docker.com/products/docker-desktop), or [Rancher Desktop](https://rancherdesktop.io/)
   - **Linux**: [minikube](https://minikube.sigs.k8s.io/docs/start/) or your preferred K8s distribution
@@ -303,6 +303,7 @@ When you run `./stop-demo.sh` without arguments, you'll see a user-friendly menu
 
 5. **Complete cleanup (everything including cluster)**
    - Same as option 4, but also stops the cluster
+   - Option to delete Colima VM for fresh start (Apple Silicon)
 
 6. **Custom cleanup options**
    - Choose exactly what to cleanup
@@ -599,8 +600,19 @@ Follow the step-by-step lab guides in the `markdown/` directory which walk throu
 - **Solution**: Install Terraform from https://www.terraform.io/downloads
 
 **Issue**: Services not accessible at localhost:8080
+- **Solution** (Colima): Services should be automatically accessible. If not, check that Colima is running with `colima status`
 - **Solution** (minikube): Ensure `minikube tunnel` is running in a separate terminal
 - **Solution** (Rancher Desktop): Check that Kubernetes is enabled in preferences
+
+**Issue**: Colima fails to start (Apple Silicon)
+- **Cause**: Missing dependencies (qemu, lima-additional-guestagents)
+- **Solution**: Install all required dependencies and start fresh:
+  ```bash
+  brew install colima docker kubectl qemu lima-additional-guestagents
+  colima stop
+  colima delete
+  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes
+  ```
 
 **Issue**: Prometheus connector fails in Harness
 - **Solution**: Use ngrok to expose Prometheus and update the connector URL to the ngrok HTTPS URL
