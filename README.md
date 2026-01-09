@@ -153,6 +153,24 @@ chmod +x start-demo.sh stop-demo.sh
 ./start-demo.sh
 ```
 
+### Demo Access URLs
+
+Once the startup script completes, access the demo at these URLs:
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| **Lab Documentation** | http://localhost:30001 | Interactive lab guides for the demo walkthrough |
+| **Demo Application** | http://localhost:8080 | Frontend web application (after deployment) |
+| **Harness UI** | https://app.harness.io | Harness platform - select "Base Demo" project |
+
+**Recommended Setup**: Use Chrome's **split tab view** (or two browser windows side-by-side) with:
+- **Left side**: Lab documentation at http://localhost:30001
+- **Right side**: Harness UI at https://app.harness.io
+
+This allows you to follow the lab instructions while working in the Harness platform without switching tabs.
+
+> **Note for minikube users**: Run `minikube tunnel` in a separate terminal to access services at localhost.
+
 ### What the Startup Script Does
 
 The `start-demo.sh` script automates the **complete demo setup** from local infrastructure to Harness resources:

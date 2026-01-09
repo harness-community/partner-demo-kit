@@ -29,6 +29,24 @@ The repository contains three main components that work together:
 - **K8s manifests**: [harness-deploy/](harness-deploy/) - Deployment and service definitions for frontend and backend
 - **Monitoring**: Prometheus configuration at [kit/prometheus.yml](kit/prometheus.yml)
 
+## Demo Access URLs
+
+Once the demo is running, access the following URLs in your browser:
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| **Lab Documentation** | http://localhost:30001 | Interactive lab guides for the demo walkthrough |
+| **Demo Application** | http://localhost:8080 | Frontend web application (after deployment) |
+| **Harness UI** | https://app.harness.io | Harness platform - select "Base Demo" project |
+
+**Recommended Setup**: Use Chrome's **split tab view** (or two browser windows side-by-side) with:
+- Left side: Lab documentation at http://localhost:30001
+- Right side: Harness UI at https://app.harness.io
+
+This allows you to follow the lab instructions while working in the Harness platform without switching tabs.
+
+**Note for minikube users**: Run `minikube tunnel` in a separate terminal to access services at localhost.
+
 ## Build and Development Commands
 
 ### Frontend (Angular)
