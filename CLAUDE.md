@@ -40,8 +40,8 @@ Once the demo is running, access the following URLs in your browser:
 | **Harness UI** | https://app.harness.io | Harness platform - select "Base Demo" project |
 
 **Recommended Setup**: Use Chrome's **split tab view** (or two browser windows side-by-side) with:
-- Left side: Lab documentation at http://localhost:30001
-- Right side: Harness UI at https://app.harness.io
+- Left side: Harness UI at https://app.harness.io
+- Right side: Lab documentation at http://localhost:30001
 
 This allows you to follow the lab instructions while working in the Harness platform without switching tabs.
 
