@@ -354,9 +354,9 @@ if command -v kubectl &> /dev/null; then
     print_error "Cannot connect to Kubernetes cluster"
     print_info "Cluster may already be stopped or not configured"
 
-    # If only doing Harness/Docker cleanup, we can continue
-    if [ "$DELETE_HARNESS_PROJECT" = true ] || [ "$DELETE_DOCKER_REPO" = true ] || [ "$DELETE_CONFIG_FILES" = true ]; then
-      print_info "Continuing with Harness/Docker/config cleanup only..."
+    # If doing Harness/Docker cleanup OR stopping cluster, we can continue
+    if [ "$DELETE_HARNESS_PROJECT" = true ] || [ "$DELETE_DOCKER_REPO" = true ] || [ "$DELETE_CONFIG_FILES" = true ] || [ "$STOP_CLUSTER" = true ]; then
+      print_info "Continuing with cleanup..."
       K8S_AVAILABLE=false
     else
       exit 1
@@ -370,6 +370,7 @@ else
 fi
 
 # Detect Kubernetes environment
+# Check directly for running Colima/minikube even if kubectl can't connect
 K8S_TYPE=""
 if [ "$K8S_AVAILABLE" = true ]; then
   if kubectl config current-context 2>/dev/null | grep -q "colima"; then
@@ -382,6 +383,21 @@ if [ "$K8S_AVAILABLE" = true ]; then
     K8S_TYPE="docker-desktop"
   else
     K8S_TYPE="other"
+  fi
+fi
+
+# If kubectl couldn't connect but we want to stop the cluster, detect Colima/minikube directly
+if [ "$K8S_AVAILABLE" = false ] && [ "$STOP_CLUSTER" = true ]; then
+  print_info "Checking for running cluster tools directly..."
+
+  # Check if Colima is running
+  if command -v colima &> /dev/null && colima status &> /dev/null; then
+    K8S_TYPE="colima"
+    print_status "Detected running Colima instance"
+  # Check if minikube is running
+  elif command -v minikube &> /dev/null && minikube status 2>/dev/null | grep -q "host: Running"; then
+    K8S_TYPE="minikube"
+    print_status "Detected running minikube instance"
   fi
 fi
 
@@ -915,7 +931,8 @@ fi
 fi  # End of K8S_AVAILABLE check for status display
 
 # Stop cluster (optional)
-if [ "$STOP_CLUSTER" = true ] && [ "$K8S_AVAILABLE" = true ]; then
+# Allow stopping if K8S_AVAILABLE is true OR if we detected a cluster directly (K8S_TYPE is set)
+if [ "$STOP_CLUSTER" = true ] && ([ "$K8S_AVAILABLE" = true ] || [ -n "$K8S_TYPE" ]); then
   if [ "$K8S_TYPE" = "colima" ]; then
     print_section "Stopping Colima"
 
