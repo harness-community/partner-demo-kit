@@ -59,7 +59,6 @@ In this hands-on lab, you'll perform the exact demonstration you just watched in
     <h4>Lab 0: Login & Setup</h4>
     <p><strong>Duration:</strong> 10 minutes</p>
     <p>Verify your environment is ready and access your Harness account. You'll confirm that all Harness resources were created in the "Base Demo" project and generate your Code Repository credentials.</p>
-    <p><a href="https://github.com/harness-community/partner-demo-kit/blob/main/markdown/0-login.md" target="_blank">📄 Access Lab 0 Guide</a></p>
 
     <hr>
 
@@ -67,7 +66,6 @@ In this hands-on lab, you'll perform the exact demonstration you just watched in
     <p><strong>Duration:</strong> 15 minutes</p>
     <p>Learn how Harness Code Repository protects your organization by detecting and blocking secrets before they're committed. You'll attempt to commit a file containing a secret token and see Harness block it in real-time.</p>
     <p><strong>Key Skills:</strong> Secret scanning, code repository security, developer workflow protection</p>
-    <p><a href="https://github.com/harness-community/partner-demo-kit/blob/main/markdown/1-coderepo.md" target="_blank">📄 Access Lab 1 Guide</a></p>
 
     <hr>
 
@@ -75,7 +73,6 @@ In this hands-on lab, you'll perform the exact demonstration you just watched in
     <p><strong>Duration:</strong> 25 minutes</p>
     <p>Build a complete CI pipeline with Test Intelligence and Docker image compilation. You'll create a pipeline that runs tests, uses the "Compile Application" template, and pushes images to Docker Hub—all running on Harness Cloud infrastructure.</p>
     <p><strong>Key Skills:</strong> Pipeline creation, Test Intelligence, Harness Cloud, template usage, artifact publishing</p>
-    <p><a href="https://github.com/harness-community/partner-demo-kit/blob/main/markdown/2-build.md" target="_blank">📄 Access Lab 2 Guide</a></p>
 
     <hr>
 
@@ -83,7 +80,6 @@ In this hands-on lab, you'll perform the exact demonstration you just watched in
     <p><strong>Duration:</strong> 20 minutes</p>
     <p>Deploy the Angular frontend application using a rolling deployment strategy to your local Kubernetes cluster. You'll configure services, environments, and execute your first CD pipeline.</p>
     <p><strong>Key Skills:</strong> CD pipeline setup, rolling deployments, Kubernetes deployment, service configuration</p>
-    <p><a href="https://github.com/harness-community/partner-demo-kit/blob/main/markdown/3-cd-frontend.md" target="_blank">📄 Access Lab 3 Guide</a></p>
 
     <hr>
 
@@ -91,7 +87,6 @@ In this hands-on lab, you'll perform the exact demonstration you just watched in
     <p><strong>Duration:</strong> 30 minutes</p>
     <p>Execute a sophisticated canary deployment of the Django backend with automated verification. You'll deploy in phases, verify canary health, and see the full power of Harness CD with Continuous Verification.</p>
     <p><strong>Key Skills:</strong> Canary deployments, continuous verification, Prometheus metrics, progressive delivery</p>
-    <p><a href="https://github.com/harness-community/partner-demo-kit/blob/main/markdown/4-cd-backend.md" target="_blank">📄 Access Lab 4 Guide</a></p>
 
     <hr>
 
@@ -100,7 +95,6 @@ In this hands-on lab, you'll perform the exact demonstration you just watched in
     <p><em>Note: Requires licensed partner organization (not available in free tier)</em></p>
     <p>Integrate security scanning into your CI pipeline to detect vulnerabilities in code, containers, and dependencies before they reach production.</p>
     <p><strong>Key Skills:</strong> Security testing integration, vulnerability scanning, shift-left security</p>
-    <p><a href="https://github.com/harness-community/partner-demo-kit/blob/main/markdown/5-security.md" target="_blank">📄 Access Lab 5 Guide</a></p>
 
     <hr>
 
@@ -108,7 +102,6 @@ In this hands-on lab, you'll perform the exact demonstration you just watched in
     <p><strong>Duration:</strong> 25 minutes</p>
     <p>Deep dive into how Harness uses Prometheus metrics to automatically verify deployment health. You'll see how continuous verification prevents bad deployments from reaching production.</p>
     <p><strong>Key Skills:</strong> Metrics-based verification, health monitoring, automated rollback triggers</p>
-    <p><a href="https://github.com/harness-community/partner-demo-kit/blob/main/markdown/6-cv.md" target="_blank">📄 Access Lab 6 Guide</a></p>
 
     <hr>
 
@@ -117,12 +110,11 @@ In this hands-on lab, you'll perform the exact demonstration you just watched in
     <p><em>Note: Requires licensed partner organization (not available in free tier)</em></p>
     <p>Implement governance guardrails using Open Policy Agent (OPA) to enforce deployment standards, security policies, and compliance requirements.</p>
     <p><strong>Key Skills:</strong> Policy as code, OPA policy creation, governance automation, compliance enforcement</p>
-    <p><a href="https://github.com/harness-community/partner-demo-kit/blob/main/markdown/7-opa.md" target="_blank">📄 Access Lab 7 Guide</a></p>
   </div>
 
   <h3>How to Navigate the Labs</h3>
   <ol>
-    <li><strong>Access the Lab Guides:</strong> Open <code>http://localhost:30001</code> in your browser to access the deployed documentation. All lab guides are also available in the <code>markdown/</code> directory of your cloned repository, or click the links above to view them on GitHub.</li>
+    <li><strong>Access the Lab Guides:</strong> Open <code>http://localhost:30001</code> in your browser to access the deployed documentation. All lab guides are also available in the <code>markdown/</code> directory of your cloned repository.</li>
     <li><strong>Set Up Your Browser Workspace:</strong> For the best experience, use one of these approaches:
       <ul>
         <li><strong>Recommended:</strong> Use Chrome's <strong>split tab view</strong> or <strong>two separate browser windows</strong>—Harness UI (app.harness.io) on the left and lab documentation (localhost:30001) on the right. This allows you to reference instructions while working.</li>
