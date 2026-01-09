@@ -33,7 +33,7 @@ In this hands-on lab, you'll perform the exact demonstration you just watched in
   <ul>
     <li>✅ Cloned the partner-demo-kit repository to your local machine</li>
     <li>✅ Ran the automated <code>start-demo.sh</code> script successfully</li>
-    <li>✅ Verified your Kubernetes cluster is running (Rancher Desktop or minikube)</li>
+    <li>✅ Verified your Kubernetes cluster is running (Colima for Apple Silicon, or minikube/Rancher Desktop for others)</li>
     <li>✅ Confirmed all Harness resources were created in the "Base Demo" project</li>
     <li>✅ Generated Harness Code Repository credentials in Harness UI</li>
   </ul>
@@ -43,7 +43,8 @@ In this hands-on lab, you'll perform the exact demonstration you just watched in
     <p>If you haven't completed the infrastructure setup, <strong>complete the previous lesson first: "Infrastructure Setup: Building Your Harness Home Lab"</strong>. The automated <code>start-demo.sh</code> script handles all infrastructure provisioning and takes approximately 8-12 minutes on first run.</p>
     <p>The script will:</p>
     <ul>
-      <li>Start your Kubernetes cluster (minikube or Rancher Desktop)</li>
+      <li>Check and offer to install missing dependencies (Apple Silicon: Colima, qemu, lima-additional-guestagents)</li>
+      <li>Start your Kubernetes cluster (Colima for Apple Silicon, minikube/Rancher Desktop for others)</li>
       <li>Deploy Prometheus for continuous verification</li>
       <li>Build and push Docker images to your Docker Hub account</li>
       <li>Provision all Harness resources using Terraform</li>
@@ -124,12 +125,12 @@ In this hands-on lab, you'll perform the exact demonstration you just watched in
     <li><strong>Access the Lab Guides:</strong> Open <code>http://localhost:30001</code> in your browser to access the deployed documentation. All lab guides are also available in the <code>markdown/</code> directory of your cloned repository, or click the links above to view them on GitHub.</li>
     <li><strong>Set Up Your Browser Workspace:</strong> For the best experience, use one of these approaches:
       <ul>
-        <li><strong>Recommended:</strong> Use Chrome with <strong>split tabs</strong> or <strong>two separate Chrome windows</strong>—one for the lab documentation (localhost:30001) and one for the Harness UI (app.harness.io). This allows you to reference instructions while working.</li>
-        <li><strong>Alternative:</strong> Use a second monitor if available—lab guide on one screen, Harness UI on the other.</li>
+        <li><strong>Recommended:</strong> Use Chrome's <strong>split tab view</strong> or <strong>two separate browser windows</strong>—Harness UI (app.harness.io) on the left and lab documentation (localhost:30001) on the right. This allows you to reference instructions while working.</li>
+        <li><strong>Alternative:</strong> Use a second monitor if available—Harness UI on one screen, lab guide on the other.</li>
       </ul>
     </li>
     <li><strong>Follow Step-by-Step Instructions:</strong> Each lab includes detailed screenshots and commands. Don't skip steps—they build on each other.</li>
-    <li><strong>Access Your Demo Application:</strong> Your application will be accessible at <code>http://localhost:8080</code> once deployed (Rancher Desktop auto-exposes; minikube requires <code>minikube tunnel</code>).</li>
+    <li><strong>Access Your Demo Application:</strong> Your application will be accessible at <code>http://localhost:8080</code> once deployed (Colima and Rancher Desktop auto-expose; minikube requires <code>minikube tunnel</code>).</li>
     <li><strong>Take Notes:</strong> Document any customizations or insights—you'll use these when creating your final pitch recording.</li>
     <li><strong>Experiment:</strong> After completing each lab as written, try variations. What happens if you change deployment strategies? How do different metrics affect verification?</li>
   </ol>
