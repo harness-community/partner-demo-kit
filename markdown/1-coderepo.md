@@ -1,72 +1,92 @@
+# Lab 1: Code Repository Secret Scanning
 
-<style type="text/css" rel="stylesheet">
-hr.cyan { background-color: cyan; color: cyan; height: 2px; margin-bottom: -10px; }
-h2.cyan { color: cyan; }
-</style><h2 class="cyan">Harness Code</h2>
-<hr class="cyan">
-<br><br>
+> **Lab Type**: BASE DEMO - Available with free Harness account
 
-First let's select the project that's been created for this workshop <br>
-![project_selection.png](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/project_selection.png)
+## Overview
+This lab demonstrates Harness Code Repository's secret scanning feature, which prevents sensitive data (like API tokens, passwords, and keys) from being committed to your repository.
 
-## Let's take a look at our code
-![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/module_code.png)
+## Prerequisites
+- Terraform setup completed (creates "Base Demo" project and `partner_demo_kit` repository)
+- Harness account with Code Repository module enabled
+- Git client installed locally
 
-Select the **Code Repository** module from the list <br>
+## Step 1: Navigate to Harness Code Repository
 
-Click on the **harnessrepo** that's been setup for you <br>
-![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/code_repo.png)
+1. Log in to your Harness account at [app.harness.io](https://app.harness.io)
+2. Select the **"Base Demo"** project
+   ![](images/2025-12-12_12-20-02.jpg)
 
-Click on **Clone** in the top right <br>
-And then click ```+Generate Clone Credential``` <br>
-![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/code_clone.png)
+3. Click on **Code Repository** module in the left navigation
 
-Copy the values from here and store them on the `Notes` 📝 tab or locally on your machine.
+   ![](images/2025-12-12_12-16-19.jpg)
 
-> # Switch to the ```>_Shell``` tab to continue
 
-### Update our credential file
-> [!NOTE]
-> This step is optional, but will eliminate the need to enter the username and password in subsequent steps.
+## Step 2: Enable Secret Scanning
 
-<br>
+1. In Harness UI, go to **Code Repository** and click into the `partner_demo_kit` repository
+2. On the left-side menu, click **Manage Repository**
+3. Click on the **Security** tab
+4. Toggle **"Secret Scanning"** to **ON**
+5. Click **Save**
 
-Click `▶️ run` and then provide the token you just copied.
-```bash,run
-./script.sh
+> **What Secret Scanning Detects**:
+> - API keys and tokens
+> - Passwords and credentials
+> - Private keys and certificates
+> - High-entropy strings that look like secrets
+> - Cloud provider credentials (AWS, Azure, GCP)
+
+## Step 3: Test Secret Scanning
+
+Now let's intentionally try to commit a secret to demonstrate the blocking feature:
+
+1. **Edit the file** `backend/entrypoint.sh`
+   ![](images/2025-12-12_13-04-51.jpg)
+
+2. **Add this line** anywhere in the file:
+   ```bash
+   TOKEN="02290a2a-7f5a-4836-8745-d4d797e475d0"
+   ```
+   ![](images/2025-12-12_13-04-27.jpg)
+
+3. **Commit your Changes**:
+   - Click `Commit changes` button and then `Commit` on the next dialog
+   
+## Expected Result
+
+The push should be **BLOCKED** with an error message similar to:
+
 ```
-
-### Clone the repo
-```bash,run
-git clone [[ Instruqt-Var key="HARNESS_REPO_URL" hostname="sandbox" ]]
+pre-receive hook blocked reference update: "Found 1 secret(s) in your code. Push rejected."
 ```
+![](images/2025-12-12_13-11-07.jpg)
 
-> # Switch to the ```Code Editor``` tab to continue
+> **This is Proactive Security in Action!**
+> The secret was blocked BEFORE it entered the repository, preventing it from ever appearing in the Git history.
 
-### Update `backend` **>** `entrypoint.sh` file
-- Under `APP_PORT=${PORT:-8000}`
-  - Add:
-```bash
-TOKEN="02290a2a-7f5a-4836-8745-d4d797e475d0"
-```
+## Key Takeaways
 
-1) Click on `Source Control` tab on the left nav
-2) Enter your commit message e.g., `added my password`
-3) Click the dropdown `v`
-4) Click `Commit & Push` \
-    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/vs_code_commit.png)
-5) Click `Yes` \
-    ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/vs_code_stage_changes.png)
+- **Harness Code Repository** provides security features to protect your code
+- **Secret scanning** prevents secrets from being pushed to repositories
+- This is **proactive security** - blocking secrets before they enter your codebase
+- No waiting for secrets to be committed - prevention happens at push time
+- The standard Git workflow (`add`, `commit`, `push`) is enforced with security checks
 
+## Why This Matters
 
-## Our commit has been blocked...
-![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/vs_code_commit_error.png)
-- Click on `Show Command Output` to see the details
+Traditional secret detection tools scan after commits are made. Harness Code blocks secrets **before** they enter your repository, providing:
+- Earlier detection in the development cycle
+- Reduced risk of exposed credentials
+- Compliance with security best practices
+- Protection against accidental credential leaks
+- No need to rewrite Git history to remove secrets
 
-## *Why wait until your secrets are committed to detect them?*
-### With ***Harness Code*** you don't have to
-Harness Code provides security features to protect your code and ***prevent*** `secrets` or `vulnerabilities` from being pushed to your Git repositories. ***Blocking*** secrets and vulnerabilities from being introduced into your repos is crucial for securing your codebase.
+## Clean Up
 
-===============
+Remove the test secret from your local file:
 
-Click the **Check** button to continue.
+- Hover over the red box at the top of the page and click the red `X` to close
+- Click `Cancel` to close the Commit dialog.
+- Click `Cancel` again to discard our file changes.
+
+---

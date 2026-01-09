@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Infrastructure Setup: Building Your Harness Home Lab</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f9f9f9;
+    }
+
+    .content {
+      background-color: white;
+      padding: 40px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      color: #1a1a1a;
+      border-bottom: 4px solid #0063F7;
+      padding-bottom: 15px;
+      margin-bottom: 30px;
+    }
+
+    h2 {
+      color: #2c3e50;
+      margin-top: 35px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #e0e0e0;
+      padding-bottom: 10px;
+    }
+
+    h3 {
+      color: #0063F7;
+      margin-top: 25px;
+      margin-bottom: 15px;
+    }
+
+    h4 {
+      color: #2c3e50;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+
+    .callout {
+      padding: 20px;
+      margin: 25px 0;
+      border-left: 5px solid;
+      border-radius: 4px;
+      background-color: #f8f9fa;
+    }
+
+    .callout-info {
+      border-left-color: #0063F7;
+      background-color: #e7f3ff;
+    }
+
+    .callout-success {
+      border-left-color: #4caf50;
+      background-color: #e8f5e9;
+    }
+
+    .callout-warning {
+      border-left-color: #ff9800;
+      background-color: #fff3e0;
+    }
+
+    .callout-tip {
+      border-left-color: #00bcd4;
+      background-color: #e0f7fa;
+    }
+
+    .callout h3 {
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+
+    code {
+      background-color: #f5f5f5;
+      padding: 3px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.9em;
+      color: #e83e8c;
+      border: 1px solid #e0e0e0;
+    }
+
+    pre {
+      background-color: #282c34;
+      color: #abb2bf;
+      padding: 20px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 20px 0;
+      border: 1px solid #1a1d23;
+    }
+
+    pre code {
+      background-color: transparent;
+      color: #abb2bf;
+      border: none;
+      padding: 0;
+      font-size: 0.95em;
+    }
+
+    ul, ol {
+      margin: 15px 0;
+      padding-left: 30px;
+    }
+
+    li {
+      margin: 10px 0;
+    }
+
+    a {
+      color: #0063F7;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .step-number {
+      display: inline-block;
+      background: #0063F7;
+      color: white;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 28px;
+      font-weight: bold;
+      margin-right: 10px;
+      font-size: 0.9em;
+    }
+
+    .checklist {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    .checklist li:before {
+      content: "✓ ";
+      color: #4caf50;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+
+    table th {
+      background-color: #0063F7;
+      color: white;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+    }
+
+    table td {
+      padding: 12px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    table tr:hover {
+      background-color: #f5f5f5;
+    }
+
+    .time-estimate {
+      display: inline-block;
+      background-color: #e7f3ff;
+      color: #0063F7;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 0.9em;
+      font-weight: 500;
+      margin-left: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="content">
+    <h1>Infrastructure Setup: Building Your Harness Home Lab</h1>
+
+    <div class="callout callout-info">
+      <h3>🎯 What You'll Accomplish</h3>
+      <p>In this lesson, you'll build your complete <strong>Harness Home Lab</strong>—a fully functional demonstration environment running entirely on your local machine. This environment will serve as your foundation for all hands-on labs and customer demonstrations.</p>
+      <p><strong>Setup Time:</strong> <span class="time-estimate">8-12 minutes (automated)</span></p>
+    </div>
+
+    <h2>Overview</h2>
+    <p>Your Harness Home Lab consists of several integrated components:</p>
+    <ul>
+      <li><strong>Local Kubernetes Cluster</strong> - Rancher Desktop or minikube for deployment targets</li>
+      <li><strong>Prometheus</strong> - Monitoring and metrics for continuous verification</li>
+      <li><strong>Docker Images</strong> - Backend and test containers pushed to Docker Hub</li>
+      <li><strong>Harness Resources</strong> - Complete "Base Demo" project with connectors, pipelines, services, and environments</li>
+      <li><strong>Demo Applications</strong> - Angular frontend and Django backend with sample code</li>
+    </ul>
+
+    <p>The good news? <strong>All of this is automated</strong> using the <code>start-demo.sh</code> script included in the repository.</p>
+
+    <h2>Prerequisites</h2>
+
+    <h3>Required Tools</h3>
+    <p>Before starting, ensure you have these tools installed on your machine:</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Tool</th>
+          <th>Purpose</th>
+          <th>Installation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Git</strong></td>
+          <td>Version control</td>
+          <td><a href="https://git-scm.com/downloads" target="_blank">git-scm.com/downloads</a></td>
+        </tr>
+        <tr>
+          <td><strong>Docker</strong></td>
+          <td>Container runtime</td>
+          <td><a href="https://www.docker.com/products/docker-desktop" target="_blank">docker.com/products/docker-desktop</a></td>
+        </tr>
+        <tr>
+          <td><strong>Kubernetes</strong></td>
+          <td>Deployment platform</td>
+          <td>
+            <strong>Apple Silicon (M1/M2/M3/M4):</strong> <a href="https://github.com/abiosoft/colima" target="_blank">Colima</a> (REQUIRED)<br>
+            <strong>Intel Mac/Windows/Linux:</strong> <a href="https://minikube.sigs.k8s.io/docs/start/" target="_blank">minikube</a>, <a href="https://rancherdesktop.io/" target="_blank">Rancher Desktop</a>, or Docker Desktop
+          </td>
+        </tr>
+        <tr>
+          <td><strong>qemu + lima-additional-guestagents</strong></td>
+          <td>VM emulation (Apple Silicon only)</td>
+          <td><code>brew install qemu lima-additional-guestagents</code></td>
+        </tr>
+        <tr>
+          <td><strong>kubectl</strong></td>
+          <td>Kubernetes CLI</td>
+          <td>Usually included with Rancher Desktop/minikube</td>
+        </tr>
+        <tr>
+          <td><strong>Helm</strong></td>
+          <td>Kubernetes package manager</td>
+          <td><a href="https://helm.sh/docs/intro/install/" target="_blank">helm.sh/docs/intro/install</a></td>
+        </tr>
+        <tr>
+          <td><strong>Terraform</strong></td>
+          <td>Infrastructure as Code (v1.0+)</td>
+          <td><a href="https://www.terraform.io/downloads" target="_blank">terraform.io/downloads</a></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout callout-warning">
+      <h3>🍎 Apple Silicon Mac Users (M1/M2/M3/M4)</h3>
+      <p>Apple Silicon Macs <strong>require Colima</strong> with Rosetta 2 for AMD64 emulation. This is necessary because Harness Cloud builds AMD64 images.</p>
+      <p>Install all required dependencies:</p>
+      <pre><code>brew install colima docker kubectl qemu lima-additional-guestagents</code></pre>
+      <p>The <code>start-demo.sh</code> script will detect missing dependencies and offer to install them automatically.</p>
+    </div>
+
+    <h3>Required Accounts</h3>
+
+    <h4>1. Harness Account</h4>
+    <ul>
+      <li>Sign up at <a href="https://app.harness.io" target="_blank">app.harness.io</a></li>
+      <li>Enable modules: <strong>CI</strong>, <strong>CD</strong>, and <strong>Code Repository</strong></li>
+      <li><strong>Critical:</strong> Add a credit card for Harness Cloud verification (free tier available)</li>
+      <li>Install Harness Delegate at the account level using Helm</li>
+    </ul>
+
+    <div class="callout callout-warning">
+      <h3>⚠️ Harness Cloud Requirement</h3>
+      <p>This demo uses <strong>Harness Cloud</strong> for CI builds, which requires credit card verification in your Harness account. Navigate to <strong>Account Settings → Billing</strong> to add your card. The free tier provides ample credits for this training.</p>
+    </div>
+
+    <h4>2. Docker Hub Account</h4>
+    <ul>
+      <li>Sign up at <a href="https://hub.docker.com" target="_blank">hub.docker.com</a></li>
+      <li>Create a repository named <code>harness-demo</code></li>
+      <li>Generate a Personal Access Token: <strong>Settings → Security → Personal Access Tokens</strong></li>
+      <li>Save your Docker Hub username and PAT—you'll need them during setup</li>
+    </ul>
+
+    <h3>System Requirements</h3>
+    <ul class="checklist">
+      <li><strong>CPU:</strong> 4+ cores recommended</li>
+      <li><strong>RAM:</strong> 8GB minimum, 16GB recommended</li>
+      <li><strong>Disk:</strong> 20GB free space</li>
+      <li><strong>OS:</strong> macOS, Linux, or Windows with WSL2</li>
+    </ul>
+
+    <h2>Step-by-Step Setup</h2>
+
+    <h3><span class="step-number">1</span> Clone the Repository</h3>
+    <p>Open your terminal and clone the partner-demo-kit repository:</p>
+    <pre><code># Clone the repository
+git clone https://github.com/harness-community/partner-demo-kit.git
+
+# Navigate into the directory
+cd partner-demo-kit</code></pre>
+
+    <div class="callout callout-tip">
+      <h3>💡 Recommended Location</h3>
+      <p>Clone the repository to an easily accessible location like:</p>
+      <ul>
+        <li><code>~/projects/partner-demo-kit</code></li>
+        <li><code>~/Documents/partner-demo-kit</code></li>
+      </ul>
+      <p>You'll reference this directory frequently during demos.</p>
+    </div>
+
+    <h3><span class="step-number">2</span> Make Scripts Executable</h3>
+    <p>Give execution permissions to the automation scripts:</p>
+    <pre><code>chmod +x start-demo.sh stop-demo.sh</code></pre>
+
+    <h3><span class="step-number">3</span> Gather Your Credentials</h3>
+    <p>Before running the setup script, gather these credentials:</p>
+
+    <h4>Harness Account ID</h4>
+    <ol>
+      <li>Log in to <a href="https://app.harness.io" target="_blank">app.harness.io</a></li>
+      <li>Click your profile icon (top right)</li>
+      <li>Your Account ID is in the URL (e.g., <code>VEuU4vZ6QmSJZcgvnccqYQ</code>)</li>
+    </ol>
+
+    <h4>Harness Personal Access Token (PAT)</h4>
+    <ol>
+      <li>In Harness, go to your profile → <strong>My API Keys & Tokens</strong></li>
+      <li>Create a new token with appropriate permissions</li>
+      <li>Copy and save the token securely</li>
+    </ol>
+
+    <h4>Docker Hub Credentials</h4>
+    <ul>
+      <li><strong>Username:</strong> Your Docker Hub username</li>
+      <li><strong>Password/PAT:</strong> Use a Personal Access Token (more secure than password)</li>
+    </ul>
+
+    <h3><span class="step-number">4</span> Run the Automated Setup</h3>
+    <p>Now execute the automated setup script:</p>
+    <pre><code>./start-demo.sh</code></pre>
+
+    <div class="callout callout-success">
+      <h3>✨ What Happens During Setup</h3>
+      <p>The <code>start-demo.sh</code> script performs these operations automatically:</p>
+      <ol>
+        <li><strong>Prerequisites Check</strong> - Verifies Docker, kubectl, Terraform are installed; on Apple Silicon, also checks for Colima, qemu, and lima-additional-guestagents</li>
+        <li><strong>Dependency Installation</strong> - Offers to install missing dependencies via Homebrew (Apple Silicon)</li>
+        <li><strong>Kubernetes Detection & Startup</strong> - Detects and starts your K8s cluster (Colima for Apple Silicon, minikube/Rancher Desktop for others)</li>
+        <li><strong>Architecture Verification</strong> - Ensures AMD64 emulation is enabled (Apple Silicon)</li>
+        <li><strong>Docker Hub Secret Creation</strong> - Creates <code>dockerhub-pull</code> secret in Kubernetes</li>
+        <li><strong>Prometheus Deployment</strong> - Deploys monitoring to the <code>monitoring</code> namespace</li>
+        <li><strong>Docker Authentication</strong> - Logs into Docker Hub (uses existing session if available)</li>
+        <li><strong>Image Building</strong> - Builds backend, test, and docs images with correct platform settings</li>
+        <li><strong>Credential Collection</strong> - Prompts for Harness and Docker credentials (cached for subsequent runs)</li>
+        <li><strong>Terraform Configuration</strong> - Updates <code>kit/se-parms.tfvars</code> automatically</li>
+        <li><strong>Resource Provisioning</strong> - Runs Terraform to create all Harness resources</li>
+        <li><strong>Documentation Deployment</strong> - Deploys lab guides to http://localhost:30001</li>
+      </ol>
+    </div>
+
+    <h3><span class="step-number">5</span> Monitor the Progress</h3>
+    <p>During setup, the script will:</p>
+    <ul>
+      <li>Display progress messages for each step</li>
+      <li>Prompt you for credentials (only on first run)</li>
+      <li>Show Terraform plan before applying (review the resources to be created)</li>
+      <li>Display final status and next steps</li>
+    </ul>
+
+    <div class="callout callout-info">
+      <h3>⏱️ Setup Duration</h3>
+      <ul>
+        <li><strong>First Run:</strong> 8-12 minutes (includes Docker builds, Terraform provisioning)</li>
+        <li><strong>Subsequent Runs:</strong> 2-3 minutes (infrastructure verification only)</li>
+      </ul>
+    </div>
+
+    <h3><span class="step-number">6</span> Verify Your Setup</h3>
+    <p>After the script completes successfully, verify everything is working:</p>
+
+    <h4>Check Kubernetes Cluster</h4>
+    <pre><code># Verify cluster is running
+kubectl cluster-info
+
+# Check all pods are healthy
+kubectl get pods -A
+
+# Verify Prometheus is deployed
+kubectl get pods -n monitoring</code></pre>
+
+    <h4>Check Harness Resources</h4>
+    <ol>
+      <li>Log in to <a href="https://app.harness.io" target="_blank">app.harness.io</a></li>
+      <li>Navigate to <strong>Projects</strong></li>
+      <li>Find the <strong>"Base Demo"</strong> project</li>
+      <li>Verify these resources exist:
+        <ul>
+          <li>Connectors: <code>workshop_k8s</code>, <code>workshopdocker</code>, Prometheus connector</li>
+          <li>Environments: Dev, Prod</li>
+          <li>Services: Backend service with K8s manifests</li>
+          <li>Code Repository: <code>partner_demo_kit</code></li>
+        </ul>
+      </li>
+    </ol>
+
+    <h4>Check Docker Images</h4>
+    <pre><code># Verify images were pushed to Docker Hub
+# Visit https://hub.docker.com/r/YOUR-USERNAME/harness-demo/tags
+# You should see: backend-latest and test-latest tags</code></pre>
+
+    <h4>Demo Access URLs</h4>
+    <p>Once setup completes, access the demo at these URLs:</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Service</th>
+          <th>URL</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Lab Documentation</strong></td>
+          <td><a href="http://localhost:30001" target="_blank">http://localhost:30001</a></td>
+          <td>Interactive lab guides for the demo walkthrough</td>
+        </tr>
+        <tr>
+          <td><strong>Demo Application</strong></td>
+          <td><a href="http://localhost:8080" target="_blank">http://localhost:8080</a></td>
+          <td>Frontend web application (after deployment)</td>
+        </tr>
+        <tr>
+          <td><strong>Harness UI</strong></td>
+          <td><a href="https://app.harness.io" target="_blank">https://app.harness.io</a></td>
+          <td>Harness platform - select "Base Demo" project</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout callout-tip">
+      <h3>💡 Recommended: Chrome Split Tab View</h3>
+      <p>For the best lab experience, use Chrome's <strong>split tab view</strong> or two browser windows side-by-side:</p>
+      <ul>
+        <li><strong>Left side:</strong> Harness UI at <code>https://app.harness.io</code></li>
+        <li><strong>Right side:</strong> Lab documentation at <code>http://localhost:30001</code></li>
+      </ul>
+      <p>This allows you to follow the lab instructions while working in Harness without constantly switching tabs.</p>
+      <p><strong>How to enable Chrome split tabs:</strong> Open both URLs in Chrome tabs, then right-click on either tab and select <strong>"Move tab to new window with side-by-side"</strong> (Chrome 135+).</p>
+    </div>
+
+    <h3><span class="step-number">7</span> Generate Code Repository Credentials</h3>
+    <p>One final manual step—generate credentials for the Harness Code Repository:</p>
+    <ol>
+      <li>In Harness UI, go to <strong>Code Repository</strong> module</li>
+      <li>Select <strong>"Base Demo"</strong> project</li>
+      <li>Click on <strong>"partner_demo_kit"</strong> repository</li>
+      <li>Click <strong>"Clone"</strong> (top right) → <strong>"+Generate Clone Credential"</strong></li>
+      <li>Save the generated username and token—you'll use these in Lab 1</li>
+      <li>Go to <strong>Manage Repository → Security</strong></li>
+      <li>Enable <strong>"Secret Scanning"</strong> and save</li>
+    </ol>
+
+    <h2>Configuration Details</h2>
+
+    <h3>Credential Storage</h3>
+    <p>The script saves your credentials to <code>.demo-config</code> (git-ignored) for convenience:</p>
+    <ul>
+      <li>Docker Hub username</li>
+      <li>Harness Account ID</li>
+      <li>Harness PAT (also supports <code>DEMO_BASE_PAT</code> environment variable)</li>
+      <li>Docker Hub password/PAT</li>
+    </ul>
+
+    <div class="callout callout-warning">
+      <h3>🔒 Security Note</h3>
+      <p>The <code>.demo-config</code> file is automatically excluded from Git. Use Personal Access Tokens instead of passwords when possible for better security.</p>
+    </div>
+
+    <h3>What Gets Created in Harness</h3>
+    <p>The Terraform configuration creates these resources in the <strong>"Base Demo"</strong> project:</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Resource Type</th>
+          <th>Name/Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Project</strong></td>
+          <td>"Base Demo" - Container for all demo resources</td>
+        </tr>
+        <tr>
+          <td><strong>Connectors</strong></td>
+          <td>
+            • workshop_k8s (local Kubernetes)<br>
+            • workshopdocker (Docker Hub)<br>
+            • Prometheus connector
+          </td>
+        </tr>
+        <tr>
+          <td><strong>Secrets</strong></td>
+          <td>Docker username and password/PAT</td>
+        </tr>
+        <tr>
+          <td><strong>Environments</strong></td>
+          <td>Dev and Prod environments</td>
+        </tr>
+        <tr>
+          <td><strong>Infrastructure</strong></td>
+          <td>K8s Dev infrastructure definition</td>
+        </tr>
+        <tr>
+          <td><strong>Services</strong></td>
+          <td>Backend service with K8s manifests</td>
+        </tr>
+        <tr>
+          <td><strong>Monitored Services</strong></td>
+          <td>backend_dev, backend_prod (for continuous verification)</td>
+        </tr>
+        <tr>
+          <td><strong>Templates</strong></td>
+          <td>"Compile Application" step template</td>
+        </tr>
+        <tr>
+          <td><strong>Code Repository</strong></td>
+          <td>partner_demo_kit (mirrored from GitHub)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>Cleanup and Reset</h2>
+
+    <h3>Using stop-demo.sh</h3>
+    <p>When you're done with the demo or need to reset, use the <code>stop-demo.sh</code> script. Running it without arguments shows an <strong>interactive menu</strong>:</p>
+
+    <pre><code>./stop-demo.sh</code></pre>
+
+    <h4>Interactive Menu Options</h4>
+    <table>
+      <thead>
+        <tr>
+          <th>Option</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>1) Minimal cleanup</strong> (default)</td>
+          <td>Stop K8s deployments only - preserves Harness resources for easy restart</td>
+        </tr>
+        <tr>
+          <td><strong>2) Stop deployments + Prometheus</strong></td>
+          <td>Also removes Prometheus monitoring</td>
+        </tr>
+        <tr>
+          <td><strong>3) Stop deployments + cluster</strong></td>
+          <td>Stops Colima/minikube - preserves Harness resources</td>
+        </tr>
+        <tr>
+          <td><strong>4) Full cleanup</strong></td>
+          <td>Deletes Harness project and Docker Hub repo - keeps cluster running</td>
+        </tr>
+        <tr>
+          <td><strong>5) Complete cleanup</strong></td>
+          <td>Everything including cluster; option to delete Colima VM (Apple Silicon)</td>
+        </tr>
+        <tr>
+          <td><strong>6) Custom cleanup</strong></td>
+          <td>Choose exactly what to cleanup</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h4>Command-Line Options (skip menu)</h4>
+    <pre><code># Skip menu with specific options
+./stop-demo.sh --delete-prometheus         # Also remove Prometheus
+./stop-demo.sh --stop-cluster              # Stop Colima/minikube
+./stop-demo.sh --delete-harness-project    # Delete Harness "Base Demo" project
+./stop-demo.sh --delete-docker-repo        # Delete Docker Hub repository
+./stop-demo.sh --delete-config-files       # Delete config and state files
+./stop-demo.sh --full-cleanup              # Everything (stops cluster, keeps credentials)</code></pre>
+
+    <div class="callout callout-info">
+      <h3>💡 API-Based Cleanup</h3>
+      <p>The <code>stop-demo.sh</code> script can delete cloud resources via API:</p>
+      <ul>
+        <li><strong>Harness Project:</strong> Uses your cached PAT to delete "Base Demo" and all resources</li>
+        <li><strong>Docker Hub Repository:</strong> Uses cached credentials to delete harness-demo repo</li>
+        <li>Both operations require explicit "yes" confirmation before proceeding</li>
+      </ul>
+    </div>
+
+    <h2>Troubleshooting</h2>
+
+    <h3>Common Issues and Solutions</h3>
+
+    <h4>Script fails with "command not found"</h4>
+    <p><strong>Cause:</strong> Missing required tool (Docker, kubectl, Terraform, etc.)</p>
+    <p><strong>Solution:</strong> Install the missing tool from the prerequisites section above</p>
+
+    <h4>Terraform authentication error</h4>
+    <p><strong>Cause:</strong> Invalid or missing Harness PAT</p>
+    <p><strong>Solution:</strong> Verify your PAT is correct and has appropriate permissions. Delete <code>.demo-config</code> and run the script again to re-enter credentials.</p>
+
+    <h4>Docker image build fails on Apple Silicon</h4>
+    <p><strong>Cause:</strong> Script couldn't detect architecture or Docker buildx not configured</p>
+    <p><strong>Solution:</strong> The script auto-detects architecture. If it fails, manually build with:</p>
+    <pre><code>cd backend
+docker buildx build --platform linux/amd64 -t YOUR-USERNAME/harness-demo:backend-latest --push .</code></pre>
+
+    <h4>Services not accessible at localhost:8080</h4>
+    <p><strong>Colima:</strong> Services should be automatically accessible. If not, check that Colima is running with <code>colima status</code></p>
+    <p><strong>Minikube:</strong> Ensure <code>minikube tunnel</code> is running in a separate terminal</p>
+    <p><strong>Rancher Desktop:</strong> Verify Kubernetes is enabled in preferences</p>
+
+    <h4>Colima fails to start (Apple Silicon)</h4>
+    <p><strong>Cause:</strong> Missing dependencies (qemu, lima-additional-guestagents)</p>
+    <p><strong>Solution:</strong> Install all required dependencies:</p>
+    <pre><code>brew install colima docker kubectl qemu lima-additional-guestagents
+colima stop
+colima delete
+colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes</code></pre>
+
+    <h4>Prometheus connector fails in Harness</h4>
+    <p><strong>Solution:</strong> If the Harness delegate can't reach cluster-local Prometheus:</p>
+    <ol>
+      <li>Install ngrok: <code>brew install ngrok</code> (Mac) or download from ngrok.com</li>
+      <li>Port forward Prometheus: <code>kubectl port-forward -n monitoring svc/prometheus-k8s 9090:9090</code></li>
+      <li>In another terminal, expose: <code>ngrok http 9090</code></li>
+      <li>Copy the HTTPS URL and update the Prometheus connector in Harness UI</li>
+    </ol>
+
+    <h4>Kubernetes cluster won't start</h4>
+    <p><strong>Colima (Apple Silicon):</strong></p>
+    <pre><code># Delete and recreate with AMD64 emulation
+colima stop
+colima delete
+colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes</code></pre>
+    <p><strong>Minikube:</strong></p>
+    <pre><code># Delete and recreate
+minikube delete
+minikube start
+minikube addons enable metrics-server</code></pre>
+    <p><strong>Rancher Desktop:</strong> Reset Kubernetes in preferences</p>
+
+    <h3>Verification Commands</h3>
+    <p>Use these commands to verify your setup:</p>
+    <pre><code># Check Colima status (Apple Silicon)
+colima status
+
+# Check Kubernetes
+kubectl cluster-info
+kubectl get nodes
+
+# Check Prometheus
+kubectl get pods -n monitoring
+kubectl get svc -n monitoring
+
+# Check Harness delegate
+kubectl get pods -n harness-delegate-ng
+
+# Check if you're logged into Docker Hub
+docker info | grep Username
+
+# Verify Terraform state
+cd kit
+terraform show</code></pre>
+
+    <h2>Advanced: Manual Setup</h2>
+    <p>While the automated script is recommended, you can also perform manual setup if needed. This is useful for understanding what happens under the hood or for troubleshooting.</p>
+
+    <div class="callout callout-tip">
+      <h3>📚 Manual Setup Documentation</h3>
+      <p>The complete manual setup process is documented in the repository README under the <strong>"Manual Setup"</strong> section. This includes:</p>
+      <ul>
+        <li>Manual Kubernetes configuration (Rancher Desktop or minikube)</li>
+        <li>Manual Prometheus deployment</li>
+        <li>Manual Docker image building with architecture considerations</li>
+        <li>Manual Terraform execution</li>
+        <li>Step-by-step Harness configuration</li>
+      </ul>
+      <p><a href="https://github.com/harness-community/partner-demo-kit#manual-setup" target="_blank">View Manual Setup Guide →</a></p>
+    </div>
+
+    <h2>Next Steps</h2>
+
+    <div class="callout callout-success">
+      <h3>🎉 Setup Complete!</h3>
+      <p>Congratulations! You've successfully built your Harness Home Lab. You now have:</p>
+      <ul class="checklist">
+        <li>A fully functional local Kubernetes cluster</li>
+        <li>Prometheus monitoring for continuous verification</li>
+        <li>Docker images ready for deployment</li>
+        <li>Complete Harness "Base Demo" project with all resources</li>
+        <li>Lab documentation accessible at localhost:30001</li>
+      </ul>
+    </div>
+
+    <h3>What's Next?</h3>
+    <p>You're now ready to begin the hands-on labs! Proceed to the next lesson:</p>
+    <p><strong>→ Hands-On Lab: Navigate the {Unscripted} Demo Track</strong></p>
+
+    <p>In the next lesson, you'll execute all seven demonstration modules using your newly created Harness Home Lab.</p>
+
+    <h2>Resources & Support</h2>
+    <ul>
+      <li><strong>Repository README:</strong> <a href="https://github.com/harness-community/partner-demo-kit" target="_blank">github.com/harness-community/partner-demo-kit</a></li>
+      <li><strong>Video Walkthrough:</strong> <a href="https://www.youtube.com/watch?v=OgUyeZVYQeg" target="_blank">YouTube Setup Guide</a></li>
+      <li><strong>Harness Documentation:</strong> <a href="https://docs.harness.io" target="_blank">docs.harness.io</a></li>
+      <li><strong>GitHub Issues:</strong> <a href="https://github.com/harness-community/partner-demo-kit/issues" target="_blank">Report Problems or Ask Questions</a></li>
+      <li><strong>Partner Manager:</strong> Contact your Harness Partner Manager for additional support</li>
+    </ul>
+
+  </div>
+</body>
+</html>

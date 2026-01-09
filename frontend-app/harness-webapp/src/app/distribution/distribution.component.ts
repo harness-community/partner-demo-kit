@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { Color, NgxChartsModule, ScaleType } from '@swimlane/ngx-charts';
 import { ApiserviceService } from '../_services/apiservice.service';
 import { ColorHelper } from '@swimlane/ngx-charts'; // Import ColorHelper from ngx-charts
@@ -6,7 +7,7 @@ import { ColorHelper } from '@swimlane/ngx-charts'; // Import ColorHelper from n
 @Component({
   selector: 'app-distribution',
   standalone: true,
-  imports: [NgxChartsModule],
+  imports: [CommonModule, NgxChartsModule],
   templateUrl: './distribution.component.html',
   styleUrl: './distribution.component.css',
 })
@@ -26,6 +27,9 @@ export class DistributionComponent {
 
   distributionData: any[]=[];
 
+  // Toggle between line chart and bar chart
+  showBarChart: boolean = true;
+
 
   constructor(private apiService: ApiserviceService) {}
 
@@ -39,6 +43,10 @@ export class DistributionComponent {
 
   run(){
     this.performApiCallRepeatedly(10);
+  }
+
+  toggleChartType() {
+    this.showBarChart = !this.showBarChart;
   }
 
   refreshDistribution() {

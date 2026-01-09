@@ -1,7 +1,6 @@
 ##Prometheus Configuration
-#Version: 
+#Version:
   #Prometheus: v2.52.0
-#Updated: 06/18/2024
 
 ---
 apiVersion: v1

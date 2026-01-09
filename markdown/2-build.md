@@ -1,108 +1,290 @@
+# Lab 2: CI Pipeline with Test Intelligence
 
-<style type="text/css" rel="stylesheet">
-hr.cyan { background-color: cyan; color: cyan; height: 2px; margin-bottom: -10px; }
-h2.cyan { color: cyan; }
-</style><h2 class="cyan">Setup a CI Pipeline</h2>
-<hr class="cyan">
-<br><br>
+> **Lab Type**: BASE DEMO - Available with free Harness account
 
-## Let's create a pipeline
-![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/module_unified.png)
+## Overview
+This lab walks through creating a complete CI pipeline with test intelligence, compilation, and Docker image building. You'll configure build infrastructure and see how Harness optimizes your CI/CD workflows.
 
-Select **Unified View** from the list <br>
+## Prerequisites
+- Harness account with CI module enabled
+- "Base Demo" project created by Terraform
+- Docker Hub account with `harness-demo` repository
 
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/nav_pipelines.png)
-> ### Click on **Pipelines** in the left Nav
-> - Click `+Create Pipeline` \
->     ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_create.png)
+## Step 1: Create a New Pipeline
 
-> **Create new Pipeline**
-> - Name: <pre>`Workshop Build and Deploy`</pre>
-> - Store: `Inline`
+1. In Harness UI, use the modular selector button to navigate to CD module
+   ![](images/2025-12-12_13-21-40.jpg)
+2. Close the wizard if displayed
+   ![](images/2025-12-12_13-23-44.jpg)
+3. Click **Pipelines** in the "Base Demo" project (close the wizard if displayed)
+4. Click **+ Create Pipeline**
+   - **Name**: `Workshop Build and Deploy`
+   - **Store**: Inline (for simplicity)
+5. Click **Start**
 
-> [!NOTE]
-> Inline vs. Remote - We're using inline for this lab, but you can also use a remote repository like GitHub. This is useful for teams that want to keep their _pipelines as code_ bundled up snuggly with _application code_. Cozy!
+> **Note**: Inline vs. Remote - We're using inline for this lab, but you can store pipelines in Git repositories alongside your application code.
 
-Click `+Add Stage` <br>
+## Step 2: Add a Build Stage
 
-> Choose **Build** stage type <br>
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_stage_build.png)
+1. Click **+ Add Stage**
+2. Select **Build** as the stage type
+   ![](images/2025-12-15_15-14-23.jpg)
+3. Configure the build stage:
+   - **Stage Name**: `Build`
+   - **Clone Codebase**: Enable
+   - **Repository Name**: `partner_demo_kit` (the Harness Code repository created by Terraform)
+   ![](images/2025-12-15_15-12-17.jpg)
+4. Click **Set Up Stage**
 
-> **Build Stage**
-> - Stage Name: <pre>`Build`</pre>
-> - Clone Codebase: `Enabled`
-> - Repository Name: `harnessrepo`
-> - Click **Set Up Stage**
+## Step 3: Configure Build Infrastructure
 
-<br>
+> **Note**: The `./start-demo.sh` script automatically creates a Docker Hub secret (`dockerhub-pull`) in your Kubernetes cluster and attaches it to the default service account. This allows build pods to pull Harness CI images like `harness/ci-addon` from Docker Hub using your authenticated credentials (Docker Hub Personal Access Token).
 
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_tab_infrastructure.png)
-> ### On the  **Infrastructure** tab
-> - Select `Cloud` and click **Continue >**
+You have several options for build infrastructure. Choose the one that best fits your needs:
 
-> [!NOTE]
-> ***Harness Cloud is the BESTEST cloud*** <br>
-> Something awesome happened right there. With zero configuration (well ok... ooooooone click!) you instantly configured an autoscaling build environment in the cloud that requires no management on your part and is dramatically less expensive than on-premise.
+### Option A: Harness Cloud (Recommended)
 
-Plus Harness is using the [fastest bare-metal hardware](https://www.harness.io/products/continuous-integration/ci-cloud) in the Solar System. Seriously. Astronauts checked.
-<br>
+> **Important**: Harness Cloud is available to use for free but you will need to verify yourself using a credit card.  You will not be charged for any use, it's simply a security measure to prevent abuse.
 
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_tab_execution.png)
-> ### On the  **Execution** tab
-> - Select `Add Step`, then `Add Step` again \
->     ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_pipeline_build_test_intelligence.png)
-> - Select `Test Intelligence` from the Step Library and configure with the details below ↓
+The following will only need to be done once:
 
+1. On the **Infrastructure** tab
+2. Click on `Update Card`, enter your card details, agree to the terms of use, and then click `Set as Default Card` to proceed.
 
-> **Test Intelligence**
-> - Name: <pre>`Test Intelligence`</pre>
-> - Command:
->  ```
->  cd ./python-tests
->  pytest
->  ```
-> - After completing configuration select **Apply Changes** from the top right of the configuration popup
+![](images/2025-12-16_13-20-50.jpg)
 
-> [!NOTE]
-> ***What is Test Intelligence?*** <br>
-> Test Intelligence helps accelerate test cycles by up to 80%. By running only relevant tests, you can achieve faster builds, shorter feedback loops, and significant cost savings.
+![](images/2025-12-16_13-21-16.jpg)
 
-> ### Add a step to compile our application
-> - Select `Add Step`,  then `Use template`
->   - To standardize our build, a template has been precreated
->     - Feel free to open up the template if you'd like to see what it's doing
-> - Select the `Compile Application` template and click `Use template`
-> - Name: <pre>`Compile`</pre>
-> - Click **Apply Changes** from the top right of the configuration popup
+1. Select **Harness Cloud**
+2. Click **Continue**
 
-> ### Add a step to build and push our artifact
-> - Select `Add Step`, then `Add Step` again \
->     ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_pipeline_build_dockerhub.png)
-> - Select `Build and Push an image to Dockerhub` from the Step Library and configure with the details below ↓
+**Benefits of Harness Cloud**:
+- Zero configuration required
+- Autoscaling build environment
+- Fastest bare-metal hardware available
+- No infrastructure management
+- Dramatically less expensive than on-premise solutions
 
-> **Build and Push an image to Dockerhub**
-> - Name: <pre>`Push to Dockerhub`</pre>
-> - Docker Connector: `workshop-docker`
-> - Docker Repository: <pre>`dockerhubaccountid/harness-demo`</pre>
-> - Tags: Click `+ Add`
-> - <pre><code>demo-base-<+pipeline.sequenceId></code></pre>
-> - **Optional Configuration  ⏷** *(Required for this Lab)*
->   - Dockerfile: <pre>`/harness/frontend-app/harness-webapp/Dockerfile`</pre>
->   - Context: <pre>`/harness/frontend-app/harness-webapp`</pre>
-> - After completing configuration select **Apply Changes** from the top right of the configuration popup
+### Option B: Kubernetes Build Farm (Alternative - x86/Intel Only)
 
-### Execute your new Pipeline
-> Click **Save** in the top right to save your new pipeline. <br>
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_save.png)
+If you do not wish to use Harness Cloud, you can use your local Kubernetes cluster:
 
-> Now click **Run** to execute the pipeline. <br>
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_run.png)
+1. On the **Infrastructure** tab
+2. Select **Kubernetes**
+3. Configure:
+   - **Connector**: `workshop_k8s` (created by Terraform)
+   - **Namespace**: `harness-delegate-ng` (or your delegate namespace)
+4. Click **Continue**
 
-> [!NOTE]
-> You might have noticed an option to pick the branch before running the pipeline. We're using `main` for simplicity, but it's a great example of how this complete build pipeline could easily be reused for other branches (or repositories or services).
+**Benefits of Kubernetes Build Farm**:
+- Use existing Kubernetes infrastructure
+- Full control over build environment
+- Works with any Kubernetes cluster (minikube, Rancher Desktop, cloud providers)
+- No external dependencies
 
-![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_lab2_execution.png)
+> **Note**: For this demo, either option will work. Harness Cloud provides a better experience but requires account verification.
 
-===============
+## Step 4: Add Run Tests Step
 
-Click the **Check** button to continue.
+1. On the **Execution** tab, click **+ Add Step**
+2. Select **Add Step** > **Test Intelligence**
+3. Configure:
+   - **Name**: `Test Intelligence`
+   - **Command**:
+     ```bash
+     mkdir -p reports
+     cd ./python-tests
+     pytest --junitxml=reports/junit.xml --html=reports/report.html --cov=. --cov-report=xml:reports/coverage.xml
+     ```
+   - Expand the `Optional Configuration`
+   - **Container Registry**: `Workshop Docker`
+   - **Image**: `dockerhubaccountid/harness-demo:test-latest`
+     - ⚠️ Use `test-latest` tag (NOT `backend-latest`) - this image has pytest pre-installed
+
+4. Click **Apply Changes**
+
+> **Important**: The `test-latest` image is a lightweight Python container with pytest pre-installed specifically for CI testing. This is different from `backend-latest` which contains the Django application.
+
+![](images/2025-12-16_11-00-25.jpg)
+
+> **Understanding Test Intelligence**:
+>
+> **The Problem**: Traditional CI systems run your entire test suite on every commit, even when only a small part of the codebase changed. This leads to:
+> - Wasted time waiting for irrelevant tests to run
+> - Higher infrastructure costs
+> - Slower developer feedback loops
+> - Reduced productivity
+>
+> **The Solution**: Test Intelligence uses ML to analyze:
+> - Code changes in your commit
+> - Historical test results and failures
+> - Code coverage data
+> - Dependencies between code and tests
+>
+> **The Result**: Test Intelligence automatically selects only the tests that are relevant to your changes:
+> - **80% faster** test execution on average
+> - **Same confidence** - catches the same bugs as running all tests
+> - **Automatic** - no configuration or test tagging required
+> - **Learns over time** - gets smarter with each run
+>
+> **How It Works in This Demo**:
+> - **First run**: Runs all tests to establish a baseline
+> - **Subsequent runs**: Only runs tests affected by code changes
+> - **Example**: If you only change `backend/views.py`, it won't run frontend tests
+>
+> This is particularly powerful for large codebases with thousands of tests where a typical commit only affects a small subset.
+
+> **Note**: While this demo uses a small test suite (so you won't see dramatic time savings), the same technology scales to save hours on enterprise test suites.
+
+## Step 5: Add Compile Step (Using Template)
+
+1. Click **+ Add Step**
+2. Select **Use Template**
+3. Select the **"Compile Application"** template (created by Terraform)
+4. Select **Use Template**
+5. Configure:
+   - **Name**: `Compile`
+6. Click **Apply Changes**
+
+> **About Templates**:
+> This step uses a pre-configured template created by Terraform. Templates allow platform teams to standardize build processes across the organization, ensuring consistency and best practices.
+>
+> The "Compile Application" template:
+> - Installs Node.js dependencies
+> - Builds the Angular frontend application
+> - Produces production-ready static assets
+
+## Step 6: Add Docker Build and Push Step
+
+1. Still in the `Build` Stage, Click **+ Add Step**
+2. Select **Add Step** > **Build and Push an image to Docker Registry**
+3. Configure:
+   - **Name**: `Push to Dockerhub`
+   - **Docker Connector**: `Workshop Docker` (created by Terraform)
+   - **Docker Repository**: `dockerhubaccountid/harness-demo`
+   - **Tags**: Click **+ Add**
+     - Add: `demo-base-<+pipeline.sequenceId>`
+     - Change field type to **Expression** using the icon
+   - **Enable Docker Layer Caching**: Check this box
+   - **Optional Configuration** (expand):
+     - **Dockerfile**: `/harness/frontend-app/harness-webapp/Dockerfile`
+     - **Context**: `/harness/frontend-app/harness-webapp`
+4. Click **Apply Changes**
+
+> **Expression Syntax**: `<+pipeline.sequenceId>` is a Harness expression that provides the pipeline execution number. This ensures each build creates a uniquely tagged Docker image.
+
+## Step 7: (Optional) Enable Cache Intelligence and Build Intelligence
+
+If you're using **Harness Cloud** for builds, you can enable both Cache Intelligence and Build Intelligence to speed up subsequent builds:
+
+1. Return to the **Build** stage **Overview** tab
+2. Scroll down to the **Cache Intelligence** section
+3. Toggle **Enable Cache Intelligence** to ON
+4. Scroll down to the **Build Intelligence** section
+5. Toggle **Enable Build Intelligence** to ON
+6. Click **Continue**
+
+![](images/2025-12-16_13-43-00.jpg)
+
+> **What is Cache Intelligence?**
+> Cache Intelligence automatically caches common dependencies to improve build times:
+> - Speeds up builds by 40-60% on average
+> - No configuration required - works automatically
+> - Caches package manager dependencies (npm, pip, maven, etc.)
+> - Available with Harness Cloud
+>
+> **What is Build Intelligence?**
+> Build Intelligence automatically caches build outputs to improve build time:
+> - Caches compiled artifacts and build outputs between runs
+> - Reduces redundant compilation and processing
+> - Currently supported on both Cloud and Kubernetes build infrastructure
+> - Works seamlessly with Cache Intelligence for maximum performance
+
+## Step 8: Save and Run the Pipeline
+
+1. Click **Save** in the top right
+2. Click **Run**
+3. Select **Branch**: `main`
+4. Click **Run Pipeline**
+
+## Monitor the Execution
+
+Watch the pipeline execute:
+- ✅ **Test Intelligence** - Runs Python tests
+- ✅ **Compile** - Builds the Angular frontend
+- ✅ **Push to Dockerhub** - Builds and pushes the Docker image
+
+> **First Run**: The first execution will run all tests. Subsequent runs will use Test Intelligence to run only relevant tests based on code changes.
+
+## Verify the Results
+
+1. **Check the pipeline execution** in Harness - all steps should be green
+2. **Verify the Docker image** was pushed:
+   - Visit: `https://hub.docker.com/r/dockerhubaccountid/harness-demo/tags`
+   - You should see a new tag: `demo-base-1` (or higher sequence number)
+
+## Key Takeaways
+
+- **Multiple infrastructure options** - Choose Harness Cloud or Kubernetes based on your needs
+- **Harness Cloud** requires account verification but provides the best experience
+- **Test Intelligence** optimizes test execution for faster feedback
+- **Templates** standardize build processes across teams
+- **Docker integration** makes artifact management seamless
+- **Cache Intelligence** (Harness Cloud only) dramatically speeds up builds
+- **Pipeline as Code** can be stored inline or in Git
+
+## Build Infrastructure Comparison
+
+<table style="width:100%; border-collapse: collapse; border: 2px solid #555;">
+  <thead>
+    <tr style="background-color: #2a2a2a; border-bottom: 3px solid #666;">
+      <th style="padding: 12px; text-align: left; border: 1px solid #555; font-weight: bold;">Feature</th>
+      <th style="padding: 12px; text-align: left; border: 1px solid #555; font-weight: bold;">Harness Cloud</th>
+      <th style="padding: 12px; text-align: left; border: 1px solid #555; font-weight: bold;">Kubernetes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="border-bottom: 1px solid #555;">
+      <td style="padding: 12px; border: 1px solid #555;"><strong>Setup Required</strong></td>
+      <td style="padding: 12px; border: 1px solid #555;">None</td>
+      <td style="padding: 12px; border: 1px solid #555;">Minimal (connector)</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #555;">
+      <td style="padding: 12px; border: 1px solid #555;"><strong>Account Requirements</strong></td>
+      <td style="padding: 12px; border: 1px solid #555;">Verified account</td>
+      <td style="padding: 12px; border: 1px solid #555;">Any account</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #555;">
+      <td style="padding: 12px; border: 1px solid #555;"><strong>Performance</strong></td>
+      <td style="padding: 12px; border: 1px solid #555;">Fastest (bare-metal)</td>
+      <td style="padding: 12px; border: 1px solid #555;">Depends on cluster</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #555;">
+      <td style="padding: 12px; border: 1px solid #555;"><strong>Scaling</strong></td>
+      <td style="padding: 12px; border: 1px solid #555;">Automatic</td>
+      <td style="padding: 12px; border: 1px solid #555;">Manual/cluster-dependent</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #555;">
+      <td style="padding: 12px; border: 1px solid #555;"><strong>Cache Intelligence</strong></td>
+      <td style="padding: 12px; border: 1px solid #555;">✅ Yes</td>
+      <td style="padding: 12px; border: 1px solid #555;">❌ No</td>
+    </tr>
+    <tr style="border-bottom: 1px solid #555;">
+      <td style="padding: 12px; border: 1px solid #555;"><strong>Cost</strong></td>
+      <td style="padding: 12px; border: 1px solid #555;">Pay-as-you-go</td>
+      <td style="padding: 12px; border: 1px solid #555;">Use existing infrastructure</td>
+    </tr>
+  </tbody>
+</table>
+
+## Pipeline Configuration Summary
+
+Your pipeline now has these components:
+- **Build** stage with:
+  - Infrastructure: Harness Cloud or Kubernetes
+  - Run Tests (pytest)
+  - Compile Application (Angular build via template)
+  - Docker Build & Push (to Docker Hub)
+  - Cache Intelligence (optional, Harness Cloud only)
+
+---

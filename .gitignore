@@ -43,3 +43,11 @@ next-env.d.ts
 *.tfplan
 *.tfstate
 *.tfstate.backup
+
+# Claude
+.claude_config.json
+
+# Demo configuration
+.demo-config
+kit/se-parms.tfvars
+kit/se-parms.tfvars

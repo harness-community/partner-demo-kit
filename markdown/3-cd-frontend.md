@@ -1,97 +1,164 @@
+# Lab 3: Continuous Deployment - Frontend
 
-<style type="text/css" rel="stylesheet">
-hr.cyan { background-color: cyan; color: cyan; height: 2px; margin-bottom: -10px; }
-h2.cyan { color: cyan; }
-</style><h2 class="cyan">Continuous Deployment - Frontend</h2>
-<hr class="cyan">
-<br><br>
+> **Lab Type**: BASE DEMO - Available with free Harness account
 
-## Time to deploy our new artifact
-### Go back to the `Pipeline Studio` and add a `Deployment` stage
+## Overview
+This lab extends your CI pipeline with a deployment stage for the frontend application. You'll deploy to your local Kubernetes cluster (Colima, minikube, or Rancher Desktop) using a rolling deployment strategy.
 
-Click `+Add Stage` <br>
+## Prerequisites
+- Completed Lab 2 (CI Pipeline)
+- Kubernetes cluster running (Colima for Apple Silicon, minikube, or Rancher Desktop)
+- "Base Demo" project with Dev environment and K8s Dev infrastructure (created by Terraform)
 
-> Choose **Deploy** stage type <br>
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_stage_deploy.png)
+## Step 1: Add a Deploy Stage
 
-> **Deploy Stage**
-> - Stage Name: <pre>`Frontend - Deployment`</pre>
-> - Deployment Type: `Kubernetes`
-> - Click **Set Up Stage**
+1. In the Pipeline Studio, click **+ Add Stage** (after the Build stage)
+2. Select **Deploy** as the stage type
+3. Configure:
+   - **Stage Name**: `Frontend - Deployment`
+   - **Deployment Type**: `Kubernetes`
+4. Click **Set Up Stage**
 
-<br>
+## Step 2: Create Frontend Service
 
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_tab_service.png)
-> ### On the  **Service** tab
-> - Click `+ Add Service`
-> - **New Service**
-> - ***About the Service***
->   - Name: <pre>`frontend`</pre>
->   - Store: `Inline`
-> - ***Service Definition***
->   - Deployment Type: `Kubernetes`
->   - Manifests: `+ Add Manifest`
->     - ***Manifest***
->       1) Manifest Type: `K8s Manifest`
->       2) Manifest Source: `Code`
->       3) Manifest Details
->         -  Manifest Identifier: <pre>`templates`</pre>
->         -  Repository Name: `harnessrepo`
->         -  Branch: <pre>`main`</pre>
->         -  File/Folder Path: <pre>`harness-deploy/frontend/manifests`</pre>
->         -  Values.yaml: `+ Add File`
->         -  <pre><code>harness-deploy/frontend/values.yaml</code></pre>
->     - Click **Submit >**
->   - Artifacts: `+ Add Artifact Source`
->     - ***Artifact***
->       1) Artifact Repository Type: `Docker Registry`
->       2) Artifact Repository: `workshop-docker`
->       3) Artifact Location
->         -  Artifact Source Identifier: <pre>`frontend`</pre>
->         -  Image Path: <pre>`dockerhubaccountid/harness-demo`</pre>
->         -  Tag: <pre><code>demo-base-<+pipeline.sequenceId></code></pre> \
->               (change the field type to expression) \
->               ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/change_input_expression.png)
->     - Click **Submit >**
->   - Click **Save**
-> - Click **Continue >**
+On the **Service** tab:
 
-<br>
+1. Click **+ Add Service**
+2. Configure the new service:
 
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_tab_environment.png)
-> ### On the  **Environment** tab
-> - Specify Environment: `dev`
-> - Specify Infrastructure: `K8s Dev`
-> - Click **Continue >**
+**About the Service:**
+- **Name**: `frontend`
+- **Store**: Inline
 
-> [!NOTE]
-> With Harness, a platform team can easily create and manage environments and infrastructure, then developers can use them to deploy their applications.
+**Service Definition:**
+- **Deployment Type**: Kubernetes
 
-<br>
+### Configure Manifests
 
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_tab_execution.png)
-> ### On the  **Execution** tab
-> - Select: `Rolling` \
->     ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/deploy_rolling.png)
-> - Click **Use Strategy**
+1. Click **+ Add Manifest**
+2. **Manifest Type**: `K8s Manifest`
+3. **Manifest Source**: `Harness Code` (Code Repository)
+4. **Manifest Details**:
+   - **Manifest Identifier**: `templates`
+   - **Repository Name**: `partner_demo_kit`
+   - **Branch**: `main`
+   - **File/Folder Path**: `harness-deploy/frontend/manifests`
+   - **Values.yaml**: Click **+ Add File**
+     - Add: `harness-deploy/frontend/values.yaml`
+5. Click **Submit**
 
-> [!NOTE]
-> The frontend is a static application so there isn't a need for `Canary` or `Blue/Green` at this time. <br>
-> In the next Lab we will use the `Canary` release strategy for our backend service.
+### Configure Artifacts
 
-### Execute your Pipeline
-> Click **Save** in the top right to save your pipeline. <br>
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_save.png)
+1. Click **+ Add Artifact Source**
+2. **Artifact Repository Type**: `Docker Registry`
+3. **Docker Registry Connector**: `workshop-docker` (created by Terraform)
+4. **Artifact Location**:
+   - **Artifact Source Identifier**: `frontend`
+   - **Image Path**: `dockerhubaccountid/harness-demo`
+   - **Tag**: `demo-base-<+pipeline.sequenceId>`
+     - Change the field type to **Expression** (click the icon)
+5. Click **Submit**
+6. Click **Save** to save the service
+7. Click **Continue**
 
-> Now click **Run** to execute the pipeline. <br>
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/assets/images/pipeline_run.png)
+## Step 3: Select Environment and Infrastructure
 
-> The build should run using: <br>
-> ![](https://raw.githubusercontent.com/harness-community/field-workshops/main/unscripted-workshop-2024/assets/images/unscripted_lab3_execution.png)
-> - Branch Name: `main`
-> - Stage: **Frontend - Deployment**
->   - Primary Artifact: `frontend`
+On the **Environment** tab:
 
-===============
+1. **Specify Environment**: `Dev` (created by Terraform)
+2. **Specify Infrastructure**: `K8s Dev` (created by Terraform)
+3. Click **Continue**
 
-Click the **Check** button to continue.
+> **Note**: Platform teams can create and manage environments and infrastructure, then developers can easily use them for deployments. This promotes consistency and reduces setup time.
+
+## Step 4: Choose Deployment Strategy
+
+On the **Execution** tab:
+
+1. Select **Rolling** deployment strategy
+2. Click **Use Strategy**
+
+> **Why Rolling?**
+> The frontend is a static application serving the UI. A rolling deployment gradually replaces pods with new versions, which is perfect for stateless applications. We'll use Canary deployment for the backend in the next lab.
+
+## Step 5: Save and Run the Pipeline
+
+1. Click **Save** in the top right
+2. Click **Run**
+3. Configure the run:
+   - **Branch Name**: `main`
+   - **Stage: Frontend - Deployment**
+     - **Primary Artifact**: `frontend`
+4. Click **Run Pipeline**
+
+## Monitor the Deployment
+
+Watch the deployment stages execute:
+- ✅ **Build** stage - Runs all CI steps from Lab 2
+- ✅ **Frontend - Deployment** - Deploys to Kubernetes
+
+> **First Deployment Note**: On your first deployment, the delegate may take 1-2 minutes to pick up the deployment task. This is normal as the delegate on your local machine initializes and connects to Harness. Subsequent deployments will be faster.
+
+## Verify the Deployment
+
+### Check Kubernetes Resources
+
+```bash
+# View deployments
+kubectl get pods -A | grep deployment
+
+# View services
+kubectl get services -A | grep svc
+```
+
+You should see:
+- `frontend-deployment` pods running
+- `web-frontend-svc` service created
+
+### Access the Application
+
+**With Colima (Apple Silicon Macs):**
+```bash
+# Services are automatically accessible
+# Open your browser to:
+http://localhost:8080
+```
+
+**With Rancher Desktop:**
+```bash
+# Services are automatically accessible
+# Open your browser to:
+http://localhost:8080
+```
+
+**With minikube:**
+```bash
+# In a separate terminal, start minikube tunnel (keep it running)
+minikube tunnel
+
+# Open your browser to:
+http://localhost:8080
+```
+
+You should see the Harness demo application UI!
+
+## Key Takeaways
+
+- **Service definitions** encapsulate deployment configuration (manifests + artifacts)
+- **Environments and infrastructure** can be reused across services and teams
+- **Rolling deployments** are ideal for stateless applications
+- **Harness Code Repository** can store Kubernetes manifests
+- **Expression syntax** `<+pipeline.sequenceId>` enables dynamic artifact selection
+
+## What You've Built
+
+Your pipeline now includes:
+1. **Build** stage (from Lab 2)
+   - Test Intelligence
+   - Compile Application
+   - Docker Build & Push
+2. **Frontend - Deployment** stage (new!)
+   - Rolling deployment to Kubernetes
+   - Uses Dev environment and K8s Dev infrastructure
+
+---

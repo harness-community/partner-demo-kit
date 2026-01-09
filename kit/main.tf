@@ -10,7 +10,7 @@ terraform {
 variable "account_id" {}
 variable "pat" {}
 variable "docker_username" {}
-variable "docker_password" {}
+variable "DOCKER_PAT" {}
 
 variable "org_id" {
   default = "default"
@@ -52,15 +52,15 @@ resource "harness_platform_repo" "partner_demo_kit" {
   }
 }
 
-resource "harness_platform_connector_kubernetes" "instruqt" {
+resource "harness_platform_connector_kubernetes" "workshop_k8s" {
   org_id             = var.org_id
   project_id         = harness_platform_project.base_demo.identifier
-  identifier         = "instruqt_k8"
-  name               = "Instruqt K8s"
-  description        = "Connector to Instruqt workshop K8s cluster"
-  
+  identifier         = "workshop_k8s"
+  name               = "Workshop K8s"
+  description        = "Connector to local K8s cluster (minikube)"
+
   inherit_from_delegate {
-    delegate_selectors = ["helm-delegate"]
+    delegate_selectors = ["local-k8s-delegate"]
   }
 
   depends_on = [
@@ -82,14 +82,14 @@ resource "harness_platform_secret_text" "docker_username" {
   ]
 }
 
-resource "harness_platform_secret_text" "docker_password" {
-  identifier                = "docker_password"
-  name                      = "docker-pw"
+resource "harness_platform_secret_text" "DOCKER_PAT" {
+  identifier                = "DOCKER_PAT"
+  name                      = "docker-pat"
   org_id                    = var.org_id
   project_id                = harness_platform_project.base_demo.identifier
   secret_manager_identifier = "harnessSecretManager"
   value_type               = "Inline"
-  value                    = var.docker_password
+  value                    = var.DOCKER_PAT
 
   depends_on = [
     harness_platform_project.base_demo
@@ -107,13 +107,13 @@ resource "harness_platform_connector_docker" "workshopdocker" {
 
   credentials {
     username_ref = harness_platform_secret_text.docker_username.identifier
-    password_ref = harness_platform_secret_text.docker_password.identifier
+    password_ref = harness_platform_secret_text.DOCKER_PAT.identifier
   }
 
   depends_on = [
     harness_platform_project.base_demo,
     harness_platform_secret_text.docker_username,
-    harness_platform_secret_text.docker_password
+    harness_platform_secret_text.DOCKER_PAT
   ]
 }
 
@@ -147,18 +147,20 @@ template:
         mkdir -p ./src/environments
         echo "export const environment = {
           production: true,
-          defaultApiUrl: "'"https://backend.sandbox.<+variable.sandbox_id>.instruqt.io"'",
+          defaultApiUrl: "'"http://localhost:8000"'",
           defaultSDKKey: "'"<+variable.sdk>"'"
         };" > ./src/environments/environment.prod.ts
 
 
         echo "export const environment = {
           production: true,
-          defaultApiUrl: "'"https://backend.sandbox.<+variable.sandbox_id>.instruqt.io"'",
+          defaultApiUrl: "'"http://localhost:8000"'",
           defaultSDKKey: "'"<+variable.sdk>"'"
         };" > ./src/environments/environment.ts
 
-        npm run build
+        # Force single-threaded build to avoid esbuild deadlock on ARM64
+        node --version
+        ng build --configuration production
   EOT
 
   depends_on = [
@@ -172,9 +174,9 @@ resource "harness_platform_connector_prometheus" "prometheus" {
   name               = "Prometheus"
   org_id             = var.org_id
   project_id         = harness_platform_project.base_demo.identifier
-  description        = "Connector to Instruqt workshop Prometheus instance"
+  description        = "Connector to Prometheus instance (use ngrok URL or cluster-local URL)"
   url                = "http://prometheus-k8s.monitoring.svc.cluster.local:9090/"
-  delegate_selectors = ["helm-delegate"]
+  delegate_selectors = ["local-k8s-delegate"]
 
   depends_on = [
     harness_platform_project.base_demo
@@ -248,7 +250,7 @@ infrastructureDefinition:
   deploymentType: Kubernetes
   type: KubernetesDirect
   spec:
-    connectorRef: ${harness_platform_connector_kubernetes.instruqt.identifier}
+    connectorRef: ${harness_platform_connector_kubernetes.workshop_k8s.identifier}
     namespace: default
     releaseName: release-<+INFRA_KEY>
   allowSimultaneousDeployments: true
@@ -257,7 +259,7 @@ EOT
   depends_on = [
     harness_platform_project.base_demo,
     harness_platform_environment.dev,
-    harness_platform_connector_kubernetes.instruqt
+    harness_platform_connector_kubernetes.workshop_k8s
   ]
 }
 
