@@ -29,6 +29,18 @@ NC='\033[0m' # No Color
 # Configuration
 SKIP_DOCKER_BUILD=false
 SKIP_TERRAFORM=false
+CONFIG_FILE=".demo-config"
+PROJECT_NAME=""
+PROJECT_IDENTIFIER=""
+
+# Load project name from config if available (for display purposes)
+if [ -f "$CONFIG_FILE" ]; then
+  PROJECT_NAME=$(grep "PROJECT_NAME=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2-)
+  PROJECT_IDENTIFIER=$(grep "PROJECT_IDENTIFIER=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+fi
+# Default to "Base Demo" if not set
+PROJECT_NAME=${PROJECT_NAME:-Base Demo}
+PROJECT_IDENTIFIER=${PROJECT_IDENTIFIER:-Base_Demo}
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -526,6 +538,62 @@ fi
 if [ "$SKIP_DOCKER_BUILD" = false ]; then
   print_section "Building Backend Docker Image"
 
+  # Prompt for project name early (needed for documentation personalization)
+  # Full validation with existence check happens in the Terraform section
+  if [ "$PROJECT_NAME" = "Base Demo" ]; then
+    echo ""
+    echo "Choose a name for your Harness project"
+    echo "This will be displayed in the Harness UI (e.g., 'Partner Workshop', 'ACME Demo')"
+    echo ""
+    echo "Note: Cannot use reserved words like: project, org, account, pipeline, service, etc."
+    echo ""
+    read -p "Enter your Harness Project name [Base Demo]: " USER_PROJECT_NAME
+
+    # Default to "Base Demo" if empty
+    USER_PROJECT_NAME=${USER_PROJECT_NAME:-Base Demo}
+
+    # Reserved words that cannot be used as project names
+    RESERVED_WORDS="project org account pipeline service environment connector secret template infrastructure delegate trigger artifact manifest variable input output stage step group"
+
+    # Function to check if a word is reserved (local to this block)
+    check_reserved() {
+      local word=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+      for reserved in $RESERVED_WORDS; do
+        if [ "$word" = "$reserved" ]; then
+          return 0
+        fi
+      done
+      return 1
+    }
+
+    # Validate project name - reserved words check only
+    VALID_NAME=false
+    while [ "$VALID_NAME" = false ]; do
+      RESERVED_FOUND=false
+      for word in $USER_PROJECT_NAME; do
+        if check_reserved "$word"; then
+          print_error "'$word' is a reserved word and cannot be used in the project name"
+          RESERVED_FOUND=true
+          break
+        fi
+      done
+
+      if [ "$RESERVED_FOUND" = true ]; then
+        read -p "Enter a different project name: " USER_PROJECT_NAME
+        USER_PROJECT_NAME=${USER_PROJECT_NAME:-Base Demo}
+      else
+        VALID_NAME=true
+      fi
+    done
+
+    PROJECT_NAME="$USER_PROJECT_NAME"
+    # Generate identifier from name (alphanumeric and underscores only)
+    PROJECT_IDENTIFIER=$(echo "$PROJECT_NAME" | sed 's/[^a-zA-Z0-9]/_/g' | sed 's/__*/_/g' | sed 's/^_//' | sed 's/_$//')
+    print_status "Project name set to: $PROJECT_NAME"
+    print_info "Project identifier: $PROJECT_IDENTIFIER"
+    echo ""
+  fi
+
   print_info "Checking Docker Hub authentication..."
 
   # Configuration file to store username
@@ -797,22 +865,37 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
     cp -r images markdown/ 2>/dev/null || true
   fi
 
-  # Replace dockerhubaccountid placeholder with actual username in markdown files
-  print_info "Personalizing lab documentation with your Docker Hub username..."
+  # Replace placeholders with actual values in markdown files
+  print_info "Personalizing lab documentation..."
   echo ""
-  echo "   The lab guides will show '$DOCKER_USERNAME/harness-demo' instead of 'dockerhubaccountid/harness-demo'"
-  echo "   This makes the instructions easier to follow with your actual Docker Hub account."
+  echo "   Replacing 'dockerhubaccountid' with '$DOCKER_USERNAME'"
+  echo "   Replacing 'Base Demo' with '$PROJECT_NAME'"
+  echo "   This makes the instructions easier to follow with your actual configuration."
   echo ""
   if command -v sed &> /dev/null; then
-    # Create temporary copies with placeholder replaced
+    # Create temporary copies with placeholders replaced
     for mdfile in markdown/*.md; do
       if [ -f "$mdfile" ]; then
         # Use different sed syntax for macOS vs Linux
         if [[ "$OSTYPE" == "darwin"* ]]; then
           sed -i '.bak' "s/dockerhubaccountid/$DOCKER_USERNAME/g" "$mdfile"
           rm -f "${mdfile}.bak"
+          # Also replace "Base Demo" with the project name (only if different)
+          if [ "$PROJECT_NAME" != "Base Demo" ]; then
+            sed -i '.bak' "s/Base Demo/$PROJECT_NAME/g" "$mdfile"
+            rm -f "${mdfile}.bak"
+            # Also replace the identifier form (Base_Demo)
+            sed -i '.bak' "s/Base_Demo/$PROJECT_IDENTIFIER/g" "$mdfile"
+            rm -f "${mdfile}.bak"
+          fi
         else
           sed -i "s/dockerhubaccountid/$DOCKER_USERNAME/g" "$mdfile"
+          # Also replace "Base Demo" with the project name (only if different)
+          if [ "$PROJECT_NAME" != "Base Demo" ]; then
+            sed -i "s/Base Demo/$PROJECT_NAME/g" "$mdfile"
+            # Also replace the identifier form (Base_Demo)
+            sed -i "s/Base_Demo/$PROJECT_IDENTIFIER/g" "$mdfile"
+          fi
         fi
       fi
     done
@@ -1028,12 +1111,150 @@ if [ "$SKIP_TERRAFORM" = false ]; then
     print_status "Using cached Docker Hub password/PAT for Terraform"
   fi
 
+  # Get Harness Project Name (may already be set from Docker build section)
+  # Only reset if not already set
+  if [ -z "$PROJECT_NAME" ]; then
+    PROJECT_NAME=""
+    PROJECT_IDENTIFIER=""
+  fi
+
+  # Reserved words that cannot be used as project names (Harness API restrictions)
+  RESERVED_WORDS="project org account pipeline service environment connector secret template infrastructure delegate trigger artifact manifest variable input output stage step group"
+
+  # Function to check if a word is reserved
+  is_reserved_word() {
+    local word=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+    for reserved in $RESERVED_WORDS; do
+      if [ "$word" = "$reserved" ]; then
+        return 0  # true - is reserved
+      fi
+    done
+    return 1  # false - not reserved
+  }
+
+  # Function to convert project name to identifier (alphanumeric and underscores only)
+  name_to_identifier() {
+    echo "$1" | sed 's/[^a-zA-Z0-9]/_/g' | sed 's/__*/_/g' | sed 's/^_//' | sed 's/_$//'
+  }
+
+  # Function to check if a project already exists in Harness
+  project_exists() {
+    local identifier="$1"
+    local response
+    local http_code
+
+    # Make API call to check if project exists
+    response=$(curl -s -w "\n%{http_code}" -X GET \
+      "https://app.harness.io/ng/api/projects/${identifier}?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default" \
+      -H "x-api-key: ${HARNESS_PAT}" \
+      -H "Content-Type: application/json" 2>/dev/null)
+
+    http_code=$(echo "$response" | tail -n 1)
+
+    if [ "$http_code" = "200" ]; then
+      return 0  # true - project exists
+    else
+      return 1  # false - project doesn't exist (404 or other error)
+    fi
+  }
+
+  # Track if project name was set from Docker build section (custom name)
+  PROJECT_FROM_DOCKER_BUILD=false
+  if [ -n "$PROJECT_NAME" ] && [ "$PROJECT_NAME" != "Base Demo" ]; then
+    PROJECT_FROM_DOCKER_BUILD=true
+  fi
+
+  # Try to get from config file if not already set
+  if [ -z "$PROJECT_NAME" ] || [ "$PROJECT_NAME" = "Base Demo" ]; then
+    if [ -f "$CONFIG_FILE" ]; then
+      CACHED_PROJECT=$(grep "PROJECT_NAME=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2-)
+      CACHED_IDENTIFIER=$(grep "PROJECT_IDENTIFIER=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+      if [ -n "$CACHED_PROJECT" ] && [ "$CACHED_PROJECT" != "Base Demo" ]; then
+        PROJECT_NAME="$CACHED_PROJECT"
+        PROJECT_IDENTIFIER="$CACHED_IDENTIFIER"
+        print_status "Using cached project name: $PROJECT_NAME"
+      fi
+    fi
+  fi
+
+  # Try to get from se-parms.tfvars if still not found
+  if [ -z "$PROJECT_NAME" ] || [ "$PROJECT_NAME" = "Base Demo" ]; then
+    if [ -f "kit/se-parms.tfvars" ]; then
+      TF_PROJECT=$(grep 'project_name' kit/se-parms.tfvars 2>/dev/null | cut -d'"' -f2)
+      TF_IDENTIFIER=$(grep 'project_identifier' kit/se-parms.tfvars 2>/dev/null | cut -d'"' -f2)
+      if [ -n "$TF_PROJECT" ] && [ "$TF_PROJECT" != "Base Demo" ]; then
+        PROJECT_NAME="$TF_PROJECT"
+        PROJECT_IDENTIFIER="$TF_IDENTIFIER"
+        print_status "Using project name from tfvars: $PROJECT_NAME"
+      fi
+    fi
+  fi
+
+  # Prompt for project name if still using default
+  if [ -z "$PROJECT_NAME" ] || [ "$PROJECT_NAME" = "Base Demo" ]; then
+    echo ""
+    echo "Choose a name for your Harness project"
+    echo "This will be displayed in the Harness UI (e.g., 'Partner Workshop', 'ACME Demo')"
+    echo ""
+    echo "Note: Cannot use reserved words like: project, org, account, pipeline, service, etc."
+    echo ""
+    read -p "Enter your Harness Project name [Base Demo]: " PROJECT_NAME
+
+    # Default to "Base Demo" if empty
+    PROJECT_NAME=${PROJECT_NAME:-Base Demo}
+  fi
+
+  # Validate project name and check existence
+  # Always do existence check (even for names from cache/config) for first-time Terraform apply
+  VALID_NAME=false
+  while [ "$VALID_NAME" = false ]; do
+    # Check for reserved words (check each word in the project name)
+    RESERVED_FOUND=false
+    for word in $PROJECT_NAME; do
+      if is_reserved_word "$word"; then
+        print_error "'$word' is a reserved word and cannot be used in the project name"
+        RESERVED_FOUND=true
+        break
+      fi
+    done
+
+    if [ "$RESERVED_FOUND" = true ]; then
+      read -p "Enter a different project name: " PROJECT_NAME
+      PROJECT_NAME=${PROJECT_NAME:-Base Demo}
+      continue
+    fi
+
+    # Generate identifier from name
+    PROJECT_IDENTIFIER=$(name_to_identifier "$PROJECT_NAME")
+
+    # Check if project already exists in Harness (only if Terraform state doesn't exist)
+    # If state exists, we're updating an existing project, not creating a new one
+    if [ ! -f "kit/terraform.tfstate" ] || [ ! -s "kit/terraform.tfstate" ]; then
+      print_info "Checking if project '$PROJECT_NAME' already exists..."
+      if project_exists "$PROJECT_IDENTIFIER"; then
+        print_error "A project with identifier '$PROJECT_IDENTIFIER' already exists in your Harness account"
+        print_info "Please choose a different project name"
+        echo ""
+        read -p "Enter a different project name: " PROJECT_NAME
+        PROJECT_NAME=${PROJECT_NAME:-Base Demo}
+        continue
+      fi
+    fi
+
+    VALID_NAME=true
+  done
+
+  print_status "Project name: $PROJECT_NAME"
+  print_info "Project identifier: $PROJECT_IDENTIFIER"
+
   # Save configuration for future runs
   {
     echo "DOCKER_USERNAME=$DOCKER_USERNAME"
     echo "HARNESS_ACCOUNT_ID=$HARNESS_ACCOUNT_ID"
     echo "HARNESS_PAT=$HARNESS_PAT"
     echo "DOCKER_PAT=$DOCKER_PAT"
+    echo "PROJECT_NAME=$PROJECT_NAME"
+    echo "PROJECT_IDENTIFIER=$PROJECT_IDENTIFIER"
   } > "$CONFIG_FILE"
   print_status "Saved credentials to $CONFIG_FILE for future runs"
   echo ""
@@ -1045,6 +1266,9 @@ account_id = "$HARNESS_ACCOUNT_ID"
 
 docker_username = "$DOCKER_USERNAME"
 DOCKER_PAT = "$DOCKER_PAT"
+
+project_name = "$PROJECT_NAME"
+project_identifier = "$PROJECT_IDENTIFIER"
 EOF
   print_status "Updated se-parms.tfvars with your configuration"
 
@@ -1183,7 +1407,7 @@ elif [ -f "kit/terraform.tfstate" ] && [ -s "kit/terraform.tfstate" ]; then
   echo "     http://localhost:30001"
   echo ""
   echo "  2. Navigate to Harness UI: https://app.harness.io"
-  echo "  3. Select the 'Base Demo' project"
+  echo "  3. Select the '$PROJECT_NAME' project"
   echo "  4. Configure Harness Code Repository:"
   echo "     - Go to Code Repository module"
   echo "     - Click 'partner_demo_kit' repository"

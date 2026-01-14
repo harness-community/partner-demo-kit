@@ -11,7 +11,7 @@
 #   OPTIONS:
 #     --delete-prometheus       Also delete Prometheus monitoring
 #     --stop-cluster            Stop the Kubernetes cluster (minikube/colima)
-#     --delete-harness-project  Delete Harness "Base Demo" project via API
+#     --delete-harness-project  Delete Harness project via API
 #     --delete-docker-repo      Delete Docker Hub harness-demo repository via API
 #     --delete-config-files     Delete .demo-config, se-parms.tfvars, and IaC state files
 #     --full-cleanup            Delete everything (all of the above)
@@ -78,7 +78,7 @@ while [[ $# -gt 0 ]]; do
       echo "Usage: ./stop-demo.sh [OPTIONS]"
       echo "  --delete-prometheus       Delete Prometheus monitoring"
       echo "  --stop-cluster            Stop Kubernetes cluster (minikube/colima)"
-      echo "  --delete-harness-project  Delete Harness 'Base Demo' project"
+      echo "  --delete-harness-project  Delete Harness project"
       echo "  --delete-docker-repo      Delete Docker Hub repository"
       echo "  --delete-config-files     Delete config and state files (.demo-config, terraform state)"
       echo "  --full-cleanup            Everything except credentials (stops cluster, keeps credentials)"
@@ -111,7 +111,7 @@ show_cleanup_menu() {
   echo "   - Preserves Harness resources for next time"
   echo ""
   echo -e "${CYAN}4)${NC} Full cleanup (delete all Harness resources)"
-  echo "   - Deletes Harness 'Base Demo' project"
+  echo "   - Deletes Harness project"
   echo "   - Deletes Docker Hub repository"
   echo "   - Removes Prometheus"
   echo "   - Keeps cluster running and config files"
@@ -200,7 +200,7 @@ show_cleanup_menu() {
         fi
       fi
 
-      read -p "Delete Harness 'Base Demo' project? [y/N]: " DELETE_HARNESS_CHOICE
+      read -p "Delete Harness '$PROJECT_NAME' project? [y/N]: " DELETE_HARNESS_CHOICE
       DELETE_HARNESS_PROJECT=false
       if [[ "$DELETE_HARNESS_CHOICE" =~ ^[Yy]$ ]]; then
         DELETE_HARNESS_PROJECT=true
@@ -283,6 +283,8 @@ HARNESS_ACCOUNT_ID=""
 HARNESS_PAT=""
 DOCKER_USERNAME=""
 DOCKER_PAT=""
+PROJECT_NAME=""
+PROJECT_IDENTIFIER=""
 
 if [ -f "$CONFIG_FILE" ]; then
   print_info "Loading credentials from $CONFIG_FILE..."
@@ -290,6 +292,8 @@ if [ -f "$CONFIG_FILE" ]; then
   HARNESS_PAT=$(grep "HARNESS_PAT=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
   DOCKER_USERNAME=$(grep "DOCKER_USERNAME=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
   DOCKER_PAT=$(grep "DOCKER_PAT=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+  PROJECT_NAME=$(grep "PROJECT_NAME=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2-)
+  PROJECT_IDENTIFIER=$(grep "PROJECT_IDENTIFIER=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
 
   # Show what was loaded (for debugging)
   if [ -n "$HARNESS_ACCOUNT_ID" ]; then
@@ -304,9 +308,16 @@ if [ -f "$CONFIG_FILE" ]; then
   if [ -n "$DOCKER_PAT" ]; then
     print_status "Loaded Docker password from config"
   fi
+  if [ -n "$PROJECT_NAME" ]; then
+    print_status "Loaded project name from config: $PROJECT_NAME"
+  fi
 else
   print_info "Config file $CONFIG_FILE not found"
 fi
+
+# Default to "Base Demo" if project name not set
+PROJECT_NAME=${PROJECT_NAME:-Base Demo}
+PROJECT_IDENTIFIER=${PROJECT_IDENTIFIER:-Base_Demo}
 
 # Check environment variable for Harness PAT (overrides cached value)
 if [ -n "$DEMO_BASE_PAT" ]; then
@@ -332,6 +343,15 @@ if [ -f "kit/se-parms.tfvars" ]; then
     DOCKER_PAT=$(grep DOCKER_PAT kit/se-parms.tfvars 2>/dev/null | cut -d'"' -f2)
     if [ -n "$DOCKER_PAT" ]; then
       print_status "Loaded Docker password from kit/se-parms.tfvars"
+    fi
+  fi
+  if [ -z "$PROJECT_NAME" ] || [ "$PROJECT_NAME" = "Base Demo" ]; then
+    TF_PROJECT_NAME=$(grep 'project_name' kit/se-parms.tfvars 2>/dev/null | cut -d'"' -f2)
+    TF_PROJECT_ID=$(grep 'project_identifier' kit/se-parms.tfvars 2>/dev/null | cut -d'"' -f2)
+    if [ -n "$TF_PROJECT_NAME" ]; then
+      PROJECT_NAME="$TF_PROJECT_NAME"
+      PROJECT_IDENTIFIER="$TF_PROJECT_ID"
+      print_status "Loaded project name from kit/se-parms.tfvars: $PROJECT_NAME"
     fi
   fi
 fi
@@ -555,18 +575,18 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
   # Check if IaC state file exists
   if [ ! -f "kit/terraform.tfstate" ] || [ ! -s "kit/terraform.tfstate" ]; then
     print_info "No Terraform state file found"
-    print_info "Will attempt to delete 'Base Demo' project directly via Harness API..."
+    print_info "Will attempt to delete '$PROJECT_NAME' project directly via Harness API..."
     echo ""
 
     # Try API deletion directly (no terraform)
     if [ -n "$HARNESS_ACCOUNT_ID" ] && [ -n "$HARNESS_PAT" ]; then
       print_info "Account: ${HARNESS_ACCOUNT_ID}"
-      print_info "Project: Base_Demo"
+      print_info "Project: $PROJECT_IDENTIFIER"
       echo ""
 
-      print_info "Deleting 'Base Demo' project via API..."
+      print_info "Deleting '$PROJECT_NAME' project via API..."
       PROJECT_DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
-        "https://app.harness.io/ng/api/projects/Base_Demo?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default" \
+        "https://app.harness.io/ng/api/projects/${PROJECT_IDENTIFIER}?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default" \
         -H "x-api-key: ${HARNESS_PAT}" \
         -H "Content-Type: application/json" 2>&1)
 
@@ -577,7 +597,7 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
       echo ""
 
       if [ "$PROJECT_HTTP_CODE" = "200" ] || [ "$PROJECT_HTTP_CODE" = "204" ]; then
-        print_status "Base Demo project deleted successfully"
+        print_status "$PROJECT_NAME project deleted successfully"
       elif [ "$PROJECT_HTTP_CODE" = "404" ]; then
         print_info "Project not found (already deleted)"
       else
@@ -595,7 +615,7 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
     print_info "Found Terraform state file"
     echo ""
     echo -e "${YELLOW}Will delete all Harness resources via Terraform:${NC}"
-    echo "  - 'Base Demo' project"
+    echo "  - '$PROJECT_NAME' project"
     echo "  - Code repositories"
     echo "  - Pipelines"
     echo "  - Services"
@@ -625,7 +645,7 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
 
           # Try to delete the pipeline via API
           PIPELINE_DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
-            "https://app.harness.io/pipeline/api/pipelines/Workshop_Build_and_Deploy?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default&projectIdentifier=Base_Demo" \
+            "https://app.harness.io/pipeline/api/pipelines/Workshop_Build_and_Deploy?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default&projectIdentifier=${PROJECT_IDENTIFIER}" \
             -H "x-api-key: ${HARNESS_PAT}" 2>/dev/null)
 
           HTTP_CODE=$(echo "$PIPELINE_DELETE_RESPONSE" | tail -n 1)
@@ -666,10 +686,10 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
             # Offer to delete the entire project via API as fallback
             echo ""
             echo -e "${YELLOW}Terraform couldn't delete all resources due to dependencies.${NC}"
-            echo -e "${YELLOW}Would you like to delete the entire 'Base Demo' project via Harness API?${NC}"
+            echo -e "${YELLOW}Would you like to delete the entire '$PROJECT_NAME' project via Harness API?${NC}"
             echo "This will forcefully delete the project and all its resources."
             echo ""
-            read -p "Delete 'Base Demo' project via API? [Y/n]: " DELETE_PROJECT_API
+            read -p "Delete '$PROJECT_NAME' project via API? [Y/n]: " DELETE_PROJECT_API
 
             # Default to yes if empty
             DELETE_PROJECT_API=${DELETE_PROJECT_API:-yes}
@@ -680,14 +700,14 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
 
               print_info "Account: ${HARNESS_ACCOUNT_ID}"
               print_info "Org: default"
-              print_info "Project: Base_Demo"
+              print_info "Project: $PROJECT_IDENTIFIER"
               echo ""
 
-              print_info "Deleting 'Base Demo' project (cascade delete all resources)..."
+              print_info "Deleting '$PROJECT_NAME' project (cascade delete all resources)..."
 
-              # Delete the entire Base Demo project with verbose output
+              # Delete the entire project with verbose output
               PROJECT_DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
-                "https://app.harness.io/ng/api/projects/Base_Demo?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default" \
+                "https://app.harness.io/ng/api/projects/${PROJECT_IDENTIFIER}?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default" \
                 -H "x-api-key: ${HARNESS_PAT}" \
                 -H "Content-Type: application/json" \
                 -H "Accept: application/json" 2>&1)
@@ -699,7 +719,7 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
               echo "HTTP Status Code: $PROJECT_HTTP_CODE"
 
               if [ "$PROJECT_HTTP_CODE" = "200" ] || [ "$PROJECT_HTTP_CODE" = "204" ]; then
-                print_status "Base Demo project deleted successfully"
+                print_status "$PROJECT_NAME project deleted successfully"
                 echo ""
                 echo "Project and all its resources have been deleted:"
                 echo "  - Services"
@@ -723,7 +743,7 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
                 fi
                 echo ""
                 print_info "Manual deletion required via Harness UI:"
-                print_info "  1. Navigate to: Projects > Base Demo"
+                print_info "  1. Navigate to: Projects > $PROJECT_NAME"
                 print_info "  2. Click the three dots (⋮) menu"
                 print_info "  3. Select 'Delete Project'"
                 print_info "  4. Confirm deletion"
@@ -735,7 +755,7 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
               print_info "  cd kit && terraform destroy -var=\"pat=\$DEMO_BASE_PAT\" -var-file=\"se-parms.tfvars\""
               print_info ""
               print_info "Or delete manually in Harness UI:"
-              print_info "  Navigate to Projects > Base Demo > ⋮ > Delete Project"
+              print_info "  Navigate to Projects > $PROJECT_NAME > ⋮ > Delete Project"
             fi
           fi
           cd ..
@@ -1003,7 +1023,7 @@ elif [ "$K8S_AVAILABLE" = true ]; then
 fi
 
 if [ "$DELETE_HARNESS_PROJECT" = true ]; then
-  echo "  ✓ Harness 'Base Demo' project"
+  echo "  ✓ Harness '$PROJECT_NAME' project"
 else
   echo "  ⊘ Harness project (still exists)"
 fi
@@ -1041,7 +1061,7 @@ if [ "$STOP_CLUSTER" = false ] && [ "$K8S_AVAILABLE" = true ]; then
 fi
 
 if [ "$DELETE_HARNESS_PROJECT" = false ]; then
-  echo "  • Harness 'Base Demo' project (manage via Harness UI or IaC)"
+  echo "  • Harness '$PROJECT_NAME' project (manage via Harness UI or IaC)"
   ANYTHING_REMAINS=true
 fi
 

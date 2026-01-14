@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Harness.io Partner Demo Kit - a self-contained demonstration environment for showcasing Harness platform capabilities (CI/CD, Code Repository, Continuous Verification, Security Testing). The demo runs entirely on local infrastructure (Colima for Apple Silicon, minikube/Docker Desktop/Rancher Desktop for other platforms) to minimize external dependencies.
 
-**Important**: All Harness resources are created in a project called "Base Demo". This segregates demo resources from production environments.
+**Important**: All Harness resources are created in a dedicated project (customizable name, default: "Base Demo"). This segregates demo resources from production environments.
 
 ## Architecture
 
@@ -37,7 +37,7 @@ Once the demo is running, access the following URLs in your browser:
 |---------|-----|-------------|
 | **Lab Documentation** | http://localhost:30001 | Interactive lab guides for the demo walkthrough |
 | **Demo Application** | http://localhost:8080 | Frontend web application (after deployment) |
-| **Harness UI** | https://app.harness.io | Harness platform - select "Base Demo" project |
+| **Harness UI** | https://app.harness.io | Harness platform - select your demo project |
 
 **Recommended Setup**: Use Chrome's **split tab view** (or two browser windows side-by-side) with:
 - Left side: Harness UI at https://app.harness.io
@@ -171,7 +171,7 @@ chmod +x start-demo.sh stop-demo.sh
 # Command-line flags (skip interactive menu):
 ./stop-demo.sh --delete-prometheus      # Also remove Prometheus
 ./stop-demo.sh --stop-cluster           # Also stop Colima/minikube
-./stop-demo.sh --delete-harness-project # Delete Harness 'Base Demo' project
+./stop-demo.sh --delete-harness-project # Delete Harness demo project
 ./stop-demo.sh --delete-docker-repo     # Delete Docker Hub repository
 ./stop-demo.sh --full-cleanup           # Complete cleanup (keeps credentials)
 ./stop-demo.sh --no-interactive         # Skip menu, use minimal cleanup
@@ -206,8 +206,8 @@ terraform plan -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars" -out=plan.t
 terraform apply -auto-approve plan.tfplan
 ```
 
-The IaC configuration creates a "Base Demo" project with:
-- Harness project "Base Demo"
+The IaC configuration creates a Harness project with configurable name (default: "Base Demo"):
+- Harness project (customizable via `project_name` and `project_identifier` variables)
 - K8s connector (`workshop_k8s`) - for local Kubernetes cluster (Colima/minikube/Rancher Desktop/Docker Desktop)
 - Docker connector (`workshopdocker`) - for Docker Hub
 - Prometheus connector - for continuous verification
@@ -332,6 +332,8 @@ Configure [kit/se-parms.tfvars](kit/se-parms.tfvars) with:
 - `account_id`: Your Harness account ID (found in URL when viewing your profile)
 - `docker_username`: Docker Hub username
 - `DOCKER_PAT`: Docker Hub password/PAT
+- `project_name`: Display name for your Harness project (default: "Base Demo")
+- `project_identifier`: Identifier for your project (alphanumeric + underscores, default: "Base_Demo")
 
 ### Environment Setup Requirements
 - Docker and Docker Hub account with `harness-demo` repository created
@@ -348,7 +350,7 @@ Configure [kit/se-parms.tfvars](kit/se-parms.tfvars) with:
 
 After Terraform creates the `partner_demo_kit` repository in Harness Code:
 
-1. Navigate to Harness UI > Code Repository module > "Base Demo" project
+1. Navigate to Harness UI > Code Repository module > your demo project
 2. Click on "partner_demo_kit" repository
 3. Click "Clone" button (top right) > "+Generate Clone Credential"
 4. Save the generated username and token
@@ -366,10 +368,10 @@ When cloning this repository locally for development:
 
 The complete demo workflow is documented in:
 1. [base-resources.txt](base-resources.txt) - Initial setup and resource provisioning
-2. [base-demo.txt](base-demo.txt) - Step-by-step demo execution guide (all in "Base Demo" project)
+2. [base-demo.txt](base-demo.txt) - Step-by-step demo execution guide (all in your demo project)
 3. [markdown/](markdown/) - Individual demo module guides (0-7) - originally for Instruqt workshops
 
-The demo demonstrates (all within "Base Demo" project):
+The demo demonstrates (all within your demo project):
 1. **Code Repository Secret Scanning** - Demonstrates blocking sensitive commits (TOKEN in backend/entrypoint.sh)
 2. **CI Pipeline** - Build stage with test intelligence, compile template, and Docker image push (uses **Harness Cloud** infrastructure)
 3. **Frontend Deployment** - Rolling deployment strategy to local K8s
@@ -389,12 +391,12 @@ The demo demonstrates (all within "Base Demo" project):
 
 To reset the demo environment and start fresh:
 
-**1. Harness Resources (in "Base Demo" project):**
+**1. Harness Resources (in your demo project):**
 ```
 - Navigate to Harness UI > Code Repo module > Manage Repository
   - Delete "partner_demo_kit" repository
 - Navigate to Harness UI > Projects
-  - Delete "Base Demo" project (this removes all project resources)
+  - Delete your demo project (this removes all project resources)
 ```
 
 **2. Local IaC State:**
@@ -442,4 +444,5 @@ This repository was originally created for Instruqt-based workshops. Key differe
 - **Added**: Git credential setup for Harness Code Repository
 - **Added**: Colima as primary option for macOS (especially Apple Silicon)
 - **Added**: Rancher Desktop and Docker Desktop as alternatives
-- **Clarified**: All resources go into "Base Demo" project for proper segregation
+- **Clarified**: All resources go into a dedicated demo project for proper segregation
+- **Added**: Customizable project name (prompted during start-demo.sh, with reserved word validation and existence check)

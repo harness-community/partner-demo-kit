@@ -16,6 +16,16 @@ variable "org_id" {
   default = "default"
 }
 
+variable "project_name" {
+  description = "Display name for the Harness project (e.g., 'Base Demo', 'Partner Workshop')"
+  default     = "Base Demo"
+}
+
+variable "project_identifier" {
+  description = "Identifier for the Harness project (alphanumeric and underscores only, e.g., 'Base_Demo')"
+  default     = "Base_Demo"
+}
+
 provider "harness" {
     endpoint            = "https://app.harness.io/gateway"
     account_id          = var.account_id
@@ -23,8 +33,8 @@ provider "harness" {
 }
 
 resource "harness_platform_project" "base_demo" {
-  identifier = "Base_Demo"
-  name       = "Base Demo"
+  identifier = var.project_identifier
+  name       = var.project_name
   org_id     = var.org_id
   color      = "#0063F7"
 }
@@ -299,7 +309,7 @@ service:
           sources:
             - spec:
                 connectorRef: ${harness_platform_connector_docker.workshopdocker.identifier}
-                imagePath: dockerhubaccountid/harness-demo
+                imagePath: ${var.docker_username}/harness-demo
                 tag: backend-latest
                 digest: ""
               identifier: backend
@@ -311,6 +321,12 @@ EOT
     harness_platform_project.base_demo,
     harness_platform_connector_docker.workshopdocker
   ]
+
+  lifecycle {
+    ignore_changes = [
+      yaml  # Allow manual updates to service configuration
+    ]
+  }
 }
 
 resource "harness_platform_monitored_service" "backend_dev" {

@@ -6,7 +6,7 @@ This repository is your complete training environment for mastering Harness demo
 
 Built from our Unscripted conference workshop materials, this hands-on training culminates in a **customer pitch recording** where you demonstrate your ability to sell Harness to prospective clients.
 
-All demo resources are created in a Harness project called **"Base Demo"** to keep demo activities segregated from production environments.
+All demo resources are created in a dedicated Harness project (default: **"Base Demo"**, customizable during setup) to keep demo activities segregated from other projects. Please note that if you using a partner licensed Harness instance, it will be important to name your project something other than the default as other colleagues may have already created a project named "Base Demo".
 
 ## Training Objectives
 
@@ -38,7 +38,7 @@ This training consists of four progressive sections:
 - **Self-Contained**: All necessary components included (Terraform configs, sample application code)
 - **Customizable**: Use as a foundation for building customer-specific demonstrations
 - **Field-Tested**: Based on materials from Harness Unscripted workshops
-- **Project Segregation**: All resources created in dedicated "Base Demo" project
+- **Project Segregation**: All resources created in a dedicated project (customizable name)
 
 ## What This Demo Showcases
 
@@ -161,7 +161,7 @@ Once the startup script completes, access the demo at these URLs:
 |---------|-----|-------------|
 | **Lab Documentation** | http://localhost:30001 | Interactive lab guides for the demo walkthrough |
 | **Demo Application** | http://localhost:8080 | Frontend web application (after deployment) |
-| **Harness UI** | https://app.harness.io | Harness platform - select "Base Demo" project |
+| **Harness UI** | https://app.harness.io | Harness platform - select your demo project |
 
 **Recommended Setup**: Use Chrome's **split tab view** (or two browser windows side-by-side) with:
 - **Left side**: Harness UI at https://app.harness.io
@@ -240,10 +240,12 @@ The `start-demo.sh` script automates the **complete demo setup** from local infr
 
 **First Run (Complete Setup):**
 - Prompts for:
+  - **Project name** (default: "Base Demo") - customizable name for your Harness project
   - Docker Hub username (unless already logged in via Docker Desktop)
   - Docker Hub password/PAT
   - Harness Account ID
   - Harness Personal Access Token (PAT)
+- Validates project name doesn't use reserved words or conflict with existing projects
 - Saves all credentials to `.demo-config` for future runs
 - Creates Harness resources via Terraform
 - Takes ~8-12 minutes total (including Docker build and IaC provisioning)
@@ -257,6 +259,7 @@ The `start-demo.sh` script automates the **complete demo setup** from local infr
 ### Credential Management
 
 The script stores credentials in `.demo-config` (git-ignored) for convenience:
+- **Project name & identifier** - Your custom Harness project name
 - **Docker Hub username** - Reused for subsequent runs
 - **Harness Account ID** - Saved to avoid re-entering
 - **Harness PAT** - Cached for convenience (can also use `DEMO_BASE_PAT` env var)
@@ -296,7 +299,7 @@ When you run `./stop-demo.sh` without arguments, you'll see a user-friendly menu
    - Preserves Harness resources for next time
 
 4. **Full cleanup (delete all Harness resources)**
-   - Deletes Harness 'Base Demo' project
+   - Deletes your Harness demo project
    - Deletes Docker Hub repository
    - Removes Prometheus
    - Keeps cluster running and config files
@@ -315,7 +318,7 @@ When you run `./stop-demo.sh` without arguments, you'll see a user-friendly menu
 For automated/scripted use:
 - `./stop-demo.sh --delete-prometheus` - Also remove Prometheus monitoring
 - `./stop-demo.sh --stop-cluster` - Also stop Kubernetes cluster (Colima or minikube)
-- `./stop-demo.sh --delete-harness-project` - Delete Harness "Base Demo" project via API
+- `./stop-demo.sh --delete-harness-project` - Delete your Harness demo project via API
 - `./stop-demo.sh --delete-docker-repo` - Delete Docker Hub harness-demo repository via API
 - `./stop-demo.sh --delete-config-files` - Delete .demo-config, se-parms.tfvars, and IaC state files
 - `./stop-demo.sh --full-cleanup` - Complete cleanup (all of the above except config files)
@@ -334,7 +337,7 @@ To restart the demo later without recreating Harness resources:
 ```
 
 > **Next Steps**: After running `start-demo.sh` successfully:
-> 1. Navigate to [app.harness.io](https://app.harness.io) and select the **"Base Demo"** project
+> 1. Navigate to [app.harness.io](https://app.harness.io) and select your demo project
 > 2. Configure Harness Code Repository (see Step 8 in Manual Setup below)
 > 3. Follow the lab guides in the [markdown/](markdown/) directory
 
@@ -491,6 +494,8 @@ cd ../kit
 account_id = "your-harness-account-id"
 docker_username = "your-dockerhub-username"
 DOCKER_PAT = "your-dockerhub-pat"
+project_name = "Base Demo"
+project_identifier = "Base_Demo"
 ```
 
 **Important**: Also update `dockerhubaccountid` in [kit/main.tf](kit/main.tf) (line ~300) with your Docker Hub username.
@@ -516,8 +521,8 @@ terraform plan -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars" -out=plan.t
 terraform apply -auto-approve plan.tfplan
 ```
 
-**What Gets Created** (all in "Base Demo" project):
-- Harness project "Base Demo"
+**What Gets Created** (all in your demo project):
+- Harness project (your custom name, default: "Base Demo")
 - Kubernetes connector (workshop_k8s)
 - Docker Hub connector (workshopdocker)
 - Prometheus connector
@@ -532,7 +537,7 @@ terraform apply -auto-approve plan.tfplan
 ### Step 8: Configure Harness Code Repository
 
 1. Navigate to Harness UI > **Code Repository** module
-2. Select **"Base Demo"** project
+2. Select your demo project
 3. Click on **"partner_demo_kit"** repository
 4. Click **"Clone"** (top right) > **"+Generate Clone Credential"**
 5. Save the generated username and token
@@ -688,7 +693,7 @@ To start fresh and reset everything, you have several options:
 ```
 
 This single command will:
-- Delete the Harness "Base Demo" project via API (with confirmation prompt)
+- Delete your Harness demo project via API (with confirmation prompt)
 - Delete the Docker Hub `harness-demo` repository via API (with confirmation prompt)
 - Delete configuration files (.demo-config, se-parms.tfvars, state files)
 - Remove Kubernetes deployments (frontend/backend)
@@ -732,7 +737,7 @@ kubectl delete namespace monitoring --ignore-not-found=true
 1. Navigate to Harness UI > **Code Repository** > Manage Repository
    - Delete **"partner_demo_kit"** repository
 2. Navigate to **Projects**
-   - Delete **"Base Demo"** project (this removes all project resources)
+   - Delete your demo project (this removes all project resources)
 
 **Step 3: Clean IaC State**
 
