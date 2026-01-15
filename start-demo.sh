@@ -1575,12 +1575,28 @@ EOF
   print_status "Updated se-parms.tfvars with your configuration"
 
   # Check if Terraform has already been applied
+  RUN_TERRAFORM=true
   if [ -f "kit/terraform.tfstate" ] && [ -s "kit/terraform.tfstate" ]; then
     echo ""
-    print_status "IaC state already exists - Harness resources appear to be configured"
-    print_info "To reconfigure, delete kit/terraform.tfstate or run: cd kit && terraform destroy (or tofu destroy)"
+    print_info "IaC state file exists from a previous run"
     echo ""
-  else
+    echo "Options:"
+    echo "  1) Skip Terraform - assume Harness resources already exist"
+    echo "  2) Re-run Terraform - recreate/update Harness resources"
+    echo ""
+    read -p "Choose [1/2] (default: 2 - re-run): " STATE_CHOICE
+    STATE_CHOICE=${STATE_CHOICE:-2}
+
+    if [ "$STATE_CHOICE" = "1" ]; then
+      print_info "Skipping Terraform - using existing Harness resources"
+      RUN_TERRAFORM=false
+    else
+      print_info "Will re-run Terraform to ensure resources are configured"
+    fi
+    echo ""
+  fi
+
+  if [ "$RUN_TERRAFORM" = "true" ]; then
 
     # Check for Terraform or OpenTofu
     print_section "Checking for Terraform/OpenTofu"
