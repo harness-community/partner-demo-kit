@@ -24,7 +24,44 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+
+# Minimum resource requirements for the demo
+MIN_CPU_CORES=4
+MIN_MEMORY_GB=8
+
+# Temporary directory for background process logs
+TEMP_DIR=$(mktemp -d)
+trap "rm -rf $TEMP_DIR" EXIT
+
+# Progress spinner function
+spinner() {
+  local pid=$1
+  local message=$2
+  local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  local i=0
+
+  while kill -0 $pid 2>/dev/null; do
+    i=$(( (i + 1) % ${#spin} ))
+    printf "\r${CYAN}${spin:$i:1}${NC} $message"
+    sleep 0.1
+  done
+  printf "\r"
+}
+
+# Wait for background process with spinner
+wait_with_spinner() {
+  local pid=$1
+  local message=$2
+  spinner $pid "$message" &
+  local spinner_pid=$!
+  wait $pid
+  local exit_code=$?
+  kill $spinner_pid 2>/dev/null || true
+  wait $spinner_pid 2>/dev/null || true
+  return $exit_code
+}
 
 # Configuration
 SKIP_DOCKER_BUILD=false
@@ -83,6 +120,116 @@ print_section() {
   echo ""
   echo -e "${BLUE}▶ $1${NC}"
   echo "----------------------------------------"
+}
+
+# Check Kubernetes cluster resources (CPU and memory)
+check_cluster_resources() {
+  print_section "Checking Cluster Resources"
+
+  # Get node resources using kubectl
+  local node_info
+  node_info=$(kubectl get nodes -o json 2>/dev/null)
+
+  if [ -z "$node_info" ]; then
+    print_error "Cannot retrieve cluster node information"
+    return 1
+  fi
+
+  # Extract allocatable CPU and memory from the first node
+  # CPU is in cores or millicores (e.g., "4" or "4000m")
+  # Memory is in bytes or Ki/Mi/Gi (e.g., "8Gi" or "8388608Ki")
+  local cpu_raw memory_raw
+  cpu_raw=$(echo "$node_info" | grep -o '"allocatable":{[^}]*}' | head -1 | grep -o '"cpu":"[^"]*"' | cut -d'"' -f4)
+  memory_raw=$(echo "$node_info" | grep -o '"allocatable":{[^}]*}' | head -1 | grep -o '"memory":"[^"]*"' | cut -d'"' -f4)
+
+  # Parse CPU (convert millicores to cores if needed)
+  local cpu_cores
+  if [[ "$cpu_raw" == *m ]]; then
+    cpu_cores=$(( ${cpu_raw%m} / 1000 ))
+  else
+    cpu_cores=$cpu_raw
+  fi
+
+  # Parse memory (convert to GB)
+  local memory_gb
+  case "$memory_raw" in
+    *Gi) memory_gb=${memory_raw%Gi} ;;
+    *G)  memory_gb=${memory_raw%G} ;;
+    *Mi) memory_gb=$(( ${memory_raw%Mi} / 1024 )) ;;
+    *Ki) memory_gb=$(( ${memory_raw%Ki} / 1024 / 1024 )) ;;
+    *)   memory_gb=$(( memory_raw / 1024 / 1024 / 1024 )) ;;
+  esac
+
+  print_info "Cluster resources: ${cpu_cores} CPU cores, ${memory_gb}GB memory"
+
+  local resources_ok=true
+
+  # Check CPU
+  if [ "$cpu_cores" -lt "$MIN_CPU_CORES" ]; then
+    print_error "Insufficient CPU: ${cpu_cores} cores (minimum: ${MIN_CPU_CORES} cores)"
+    resources_ok=false
+  else
+    print_status "CPU: ${cpu_cores} cores (minimum: ${MIN_CPU_CORES})"
+  fi
+
+  # Check memory
+  if [ "$memory_gb" -lt "$MIN_MEMORY_GB" ]; then
+    print_error "Insufficient memory: ${memory_gb}GB (minimum: ${MIN_MEMORY_GB}GB)"
+    resources_ok=false
+  else
+    print_status "Memory: ${memory_gb}GB (minimum: ${MIN_MEMORY_GB}GB)"
+  fi
+
+  if [ "$resources_ok" = false ]; then
+    echo ""
+    print_error "Cluster does not meet minimum resource requirements"
+    echo ""
+    echo "The demo requires at least ${MIN_CPU_CORES} CPU cores and ${MIN_MEMORY_GB}GB memory."
+    echo ""
+
+    # Provide platform-specific remediation instructions
+    if [ "$K8S_TYPE" = "colima" ]; then
+      echo "To increase Colima resources:"
+      echo "  colima stop"
+      echo "  colima delete"
+      if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
+        echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu ${MIN_CPU_CORES} --memory ${MIN_MEMORY_GB} --kubernetes"
+      else
+        echo "  colima start --cpu ${MIN_CPU_CORES} --memory ${MIN_MEMORY_GB} --kubernetes"
+      fi
+    elif [ "$K8S_TYPE" = "minikube" ]; then
+      echo "To increase minikube resources:"
+      echo "  minikube stop"
+      echo "  minikube delete"
+      echo "  minikube start --cpus=${MIN_CPU_CORES} --memory=${MIN_MEMORY_GB}g"
+    elif [ "$K8S_TYPE" = "docker-desktop" ]; then
+      echo "To increase Docker Desktop resources:"
+      echo "  1. Open Docker Desktop > Settings > Resources"
+      echo "  2. Set CPUs to at least ${MIN_CPU_CORES}"
+      echo "  3. Set Memory to at least ${MIN_MEMORY_GB}GB"
+      echo "  4. Click 'Apply & Restart'"
+    elif [ "$K8S_TYPE" = "rancher-desktop" ]; then
+      echo "To increase Rancher Desktop resources:"
+      echo "  1. Open Rancher Desktop > Preferences > Virtual Machine"
+      echo "  2. Set CPUs to at least ${MIN_CPU_CORES}"
+      echo "  3. Set Memory to at least ${MIN_MEMORY_GB}GB"
+      echo "  4. Click 'Apply'"
+    else
+      echo "Please increase your Kubernetes cluster resources to at least:"
+      echo "  - CPU: ${MIN_CPU_CORES} cores"
+      echo "  - Memory: ${MIN_MEMORY_GB}GB"
+    fi
+    echo ""
+
+    read -p "Continue anyway? (not recommended) [y/N]: " CONTINUE_ANYWAY
+    if [[ ! "$CONTINUE_ANYWAY" =~ ^[Yy]$ ]]; then
+      print_error "Exiting. Please increase cluster resources and try again."
+      exit 1
+    fi
+    print_info "Continuing with insufficient resources (may experience issues)..."
+  else
+    print_status "Cluster resources are sufficient for the demo"
+  fi
 }
 
 # Detect Operating System and Architecture
@@ -419,6 +566,9 @@ else
   exit 1
 fi
 
+# Check cluster resources (CPU and memory)
+check_cluster_resources
+
 # Create Docker Hub secret for pulling images
 print_section "Creating Docker Hub Secret for Image Pulls"
 
@@ -490,48 +640,43 @@ else
   print_info "The secret will be created after Docker authentication"
 fi
 
-# Deploy Prometheus
-print_section "Deploying Prometheus"
+# Deploy Prometheus (non-blocking - runs in background)
+print_section "Deploying Prometheus (Background)"
 
-# Check if monitoring namespace exists
-if kubectl get namespace monitoring &> /dev/null; then
-  print_info "Monitoring namespace already exists"
-else
-  print_info "Creating monitoring namespace..."
-  kubectl create namespace monitoring
-  print_status "Monitoring namespace created"
-fi
+# Function to deploy Prometheus in background
+deploy_prometheus_background() {
+  {
+    # Check if monitoring namespace exists
+    if ! kubectl get namespace monitoring &> /dev/null; then
+      kubectl create namespace monitoring 2>/dev/null
+    fi
 
-# Check if Prometheus is already deployed and running
-PROMETHEUS_ALREADY_RUNNING=false
+    # Check if Prometheus is already deployed and running
+    if kubectl get pods -n monitoring -l app=prometheus 2>/dev/null | grep -q "Running"; then
+      echo "ALREADY_RUNNING" > "$TEMP_DIR/prometheus_status"
+    elif kubectl get deployment -n monitoring prometheus-deployment &> /dev/null; then
+      kubectl -n monitoring delete -f kit/prometheus.yml --ignore-not-found=true &> /dev/null
+      sleep 3
+      kubectl -n monitoring apply -f kit/prometheus.yml &> /dev/null
+      kubectl wait --for=condition=ready pod -l app=prometheus -n monitoring --timeout=120s &> /dev/null
+      echo "REDEPLOYED" > "$TEMP_DIR/prometheus_status"
+    else
+      kubectl -n monitoring apply -f kit/prometheus.yml &> /dev/null
+      kubectl wait --for=condition=ready pod -l app=prometheus -n monitoring --timeout=120s &> /dev/null
+      echo "DEPLOYED" > "$TEMP_DIR/prometheus_status"
+    fi
+  } &> "$TEMP_DIR/prometheus.log"
+  echo $? > "$TEMP_DIR/prometheus_exit_code"
+}
+
+# Check if already running before starting background deployment
 if kubectl get pods -n monitoring -l app=prometheus 2>/dev/null | grep -q "Running"; then
   print_status "Prometheus is already running"
-  PROMETHEUS_ALREADY_RUNNING=true
-elif kubectl get deployment -n monitoring prometheus-deployment &> /dev/null; then
-  print_info "Prometheus deployment exists but not running, redeploying..."
-  kubectl -n monitoring delete -f kit/prometheus.yml --ignore-not-found=true &> /dev/null
-  sleep 5
-  kubectl -n monitoring apply -f kit/prometheus.yml &> /dev/null
-  print_status "Prometheus redeployed"
+  PROMETHEUS_PID=""
 else
-  print_info "Deploying Prometheus..."
-  kubectl -n monitoring apply -f kit/prometheus.yml &> /dev/null
-  print_status "Prometheus deployed"
-fi
-
-# Wait for Prometheus to be ready (only if we just deployed or redeployed it)
-if [ "$PROMETHEUS_ALREADY_RUNNING" = false ]; then
-  print_info "Waiting for Prometheus to be ready..."
-  if kubectl wait --for=condition=ready pod -l app=prometheus -n monitoring --timeout=120s &> /dev/null; then
-    print_status "Prometheus is ready"
-  else
-    # Double-check if it's actually running despite wait timeout
-    if kubectl get pods -n monitoring -l app=prometheus 2>/dev/null | grep -q "Running"; then
-      print_status "Prometheus is running"
-    else
-      print_error "Prometheus failed to start. Check with: kubectl get pods -n monitoring"
-    fi
-  fi
+  print_info "Prometheus deployment started in background..."
+  deploy_prometheus_background &
+  PROMETHEUS_PID=$!
 fi
 
 # Build and push Docker images (optional)
@@ -781,84 +926,8 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
     PUSH_FLAG=""
   fi
 
-  # Build backend image
-  print_info "Building backend Docker image (this may take a few minutes)..."
-  cd backend
-  if [ -n "$PUSH_FLAG" ]; then
-    # Use buildx with --push for ARM64
-    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:backend-latest" $PUSH_FLAG . --quiet; then
-      print_status "Backend image built and pushed: $DOCKER_USERNAME/harness-demo:backend-latest"
-    else
-      print_error "Docker buildx failed"
-      cd ..
-      exit 1
-    fi
-  else
-    # Regular build for Intel/AMD
-    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:backend-latest" . --quiet; then
-      print_status "Backend image built: $DOCKER_USERNAME/harness-demo:backend-latest"
-
-      # Push backend image separately for Intel/AMD
-      print_info "Pushing backend image to Docker Hub..."
-      if docker push "$DOCKER_USERNAME/harness-demo:backend-latest" --quiet; then
-        print_status "Backend image pushed to Docker Hub"
-      else
-        print_error "Docker push failed"
-        echo ""
-        echo "Common causes:"
-        echo "  1. Repository doesn't exist - Create 'harness-demo' at https://hub.docker.com/repository/create"
-        echo "  2. Authentication failed - Your credentials may be invalid"
-        echo "  3. No push access - Check repository permissions"
-        echo ""
-        echo "To fix:"
-        echo "  • Go to https://hub.docker.com/repository/create"
-        echo "  • Create a repository named: harness-demo"
-        echo "  • Make it public or private (your choice)"
-        echo "  • Then re-run: ./start-demo.sh"
-        echo ""
-        cd ..
-        exit 1
-      fi
-    else
-      print_error "Docker build failed"
-      cd ..
-      exit 1
-    fi
-  fi
-  cd ..
-
-  # Build test image for Test Intelligence
-  print_info "Building test Docker image for Harness Test Intelligence..."
-  cd python-tests
-  if [ -n "$PUSH_FLAG" ]; then
-    # Use buildx with --push for ARM64
-    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:test-latest" $PUSH_FLAG . --quiet; then
-      print_status "Test image built and pushed: $DOCKER_USERNAME/harness-demo:test-latest"
-    else
-      print_error "Test image buildx failed"
-      cd ..
-      exit 1
-    fi
-  else
-    # Regular build for Intel/AMD
-    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:test-latest" . --quiet; then
-      print_status "Test image built: $DOCKER_USERNAME/harness-demo:test-latest"
-
-      # Push test image
-      print_info "Pushing test image to Docker Hub..."
-      if docker push "$DOCKER_USERNAME/harness-demo:test-latest" --quiet; then
-        print_status "Test image pushed to Docker Hub"
-      else
-        print_error "Test image push failed (this is not critical, continuing...)"
-      fi
-    else
-      print_error "Test image build failed (this is not critical, continuing...)"
-    fi
-  fi
-  cd ..
-
-  # Build documentation image
-  print_info "Building documentation Docker image..."
+  # Prepare documentation files before parallel builds
+  print_info "Preparing documentation for build..."
 
   # Copy images into markdown directory for Docker build context
   if [ -d "images" ]; then
@@ -873,27 +942,21 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
   echo "   This makes the instructions easier to follow with your actual configuration."
   echo ""
   if command -v sed &> /dev/null; then
-    # Create temporary copies with placeholders replaced
     for mdfile in markdown/*.md; do
       if [ -f "$mdfile" ]; then
-        # Use different sed syntax for macOS vs Linux
         if [[ "$OSTYPE" == "darwin"* ]]; then
           sed -i '.bak' "s/dockerhubaccountid/$DOCKER_USERNAME/g" "$mdfile"
           rm -f "${mdfile}.bak"
-          # Also replace "Base Demo" with the project name (only if different)
           if [ "$PROJECT_NAME" != "Base Demo" ]; then
             sed -i '.bak' "s/Base Demo/$PROJECT_NAME/g" "$mdfile"
             rm -f "${mdfile}.bak"
-            # Also replace the identifier form (Base_Demo)
             sed -i '.bak' "s/Base_Demo/$PROJECT_IDENTIFIER/g" "$mdfile"
             rm -f "${mdfile}.bak"
           fi
         else
           sed -i "s/dockerhubaccountid/$DOCKER_USERNAME/g" "$mdfile"
-          # Also replace "Base Demo" with the project name (only if different)
           if [ "$PROJECT_NAME" != "Base Demo" ]; then
             sed -i "s/Base Demo/$PROJECT_NAME/g" "$mdfile"
-            # Also replace the identifier form (Base_Demo)
             sed -i "s/Base_Demo/$PROJECT_IDENTIFIER/g" "$mdfile"
           fi
         fi
@@ -902,39 +965,175 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
     print_status "Documentation personalized successfully"
   fi
 
-  cd markdown
-  if [ -n "$PUSH_FLAG" ]; then
-    # Use buildx with --push for ARM64
-    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:docs-latest" $PUSH_FLAG . --quiet; then
-      print_status "Documentation image built and pushed: $DOCKER_USERNAME/harness-demo:docs-latest"
-    else
-      print_error "Documentation buildx failed (this is not critical, continuing...)"
-    fi
-  else
-    # Regular build for Intel/AMD
-    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:docs-latest" . --quiet; then
-      print_status "Documentation image built: $DOCKER_USERNAME/harness-demo:docs-latest"
+  # ============================================================
+  # PARALLEL DOCKER BUILDS - Build all images simultaneously
+  # ============================================================
+  print_section "Building Docker Images (Parallel)"
+  echo ""
+  print_info "Building 3 images in parallel: backend, test, docs"
+  print_info "This significantly reduces total build time"
+  echo ""
 
-      # Push documentation image
-      print_info "Pushing documentation image to Docker Hub..."
-      if docker push "$DOCKER_USERNAME/harness-demo:docs-latest" --quiet; then
-        print_status "Documentation image pushed to Docker Hub"
+  # Function to build and push an image
+  build_image() {
+    local name=$1
+    local dir=$2
+    local tag=$3
+    local log_file="$TEMP_DIR/${name}.log"
+    local exit_file="$TEMP_DIR/${name}.exit"
+
+    {
+      cd "$dir"
+      if [ -n "$PUSH_FLAG" ]; then
+        # ARM64: Use buildx with --push
+        if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:$tag" $PUSH_FLAG . --quiet 2>&1; then
+          echo "SUCCESS" > "$exit_file"
+        else
+          echo "FAILED" > "$exit_file"
+        fi
       else
-        print_error "Documentation push failed (this is not critical, continuing...)"
+        # Intel/AMD: Build then push
+        if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:$tag" . --quiet 2>&1; then
+          if docker push "$DOCKER_USERNAME/harness-demo:$tag" --quiet 2>&1; then
+            echo "SUCCESS" > "$exit_file"
+          else
+            echo "PUSH_FAILED" > "$exit_file"
+          fi
+        else
+          echo "BUILD_FAILED" > "$exit_file"
+        fi
+      fi
+      cd - > /dev/null
+    } > "$log_file" 2>&1
+  }
+
+  # Get absolute path for parallel builds
+  REPO_ROOT=$(pwd)
+
+  # Start all builds in parallel
+  build_image "backend" "$REPO_ROOT/backend" "backend-latest" &
+  BACKEND_PID=$!
+
+  build_image "test" "$REPO_ROOT/python-tests" "test-latest" &
+  TEST_PID=$!
+
+  build_image "docs" "$REPO_ROOT/markdown" "docs-latest" &
+  DOCS_PID=$!
+
+  echo "  Backend image (PID: $BACKEND_PID)"
+  echo "  Test image    (PID: $TEST_PID)"
+  echo "  Docs image    (PID: $DOCS_PID)"
+  echo ""
+
+  # Wait for all builds with progress indicator
+  print_info "Building images... (this may take 2-5 minutes)"
+
+  # Track completion status
+  BUILDS_COMPLETE=0
+  TOTAL_BUILDS=3
+
+  while [ $BUILDS_COMPLETE -lt $TOTAL_BUILDS ]; do
+    BUILDS_COMPLETE=0
+    STATUS_LINE=""
+
+    # Check backend
+    if ! kill -0 $BACKEND_PID 2>/dev/null; then
+      BUILDS_COMPLETE=$((BUILDS_COMPLETE + 1))
+      if [ -f "$TEMP_DIR/backend.exit" ]; then
+        BACKEND_STATUS=$(cat "$TEMP_DIR/backend.exit")
+        if [ "$BACKEND_STATUS" = "SUCCESS" ]; then
+          STATUS_LINE="${STATUS_LINE}${GREEN}✓${NC} backend "
+        else
+          STATUS_LINE="${STATUS_LINE}${RED}✗${NC} backend "
+        fi
       fi
     else
-      print_error "Documentation Docker build failed (this is not critical, continuing...)"
+      STATUS_LINE="${STATUS_LINE}${CYAN}⠿${NC} backend "
     fi
+
+    # Check test
+    if ! kill -0 $TEST_PID 2>/dev/null; then
+      BUILDS_COMPLETE=$((BUILDS_COMPLETE + 1))
+      if [ -f "$TEMP_DIR/test.exit" ]; then
+        TEST_STATUS=$(cat "$TEMP_DIR/test.exit")
+        if [ "$TEST_STATUS" = "SUCCESS" ]; then
+          STATUS_LINE="${STATUS_LINE}${GREEN}✓${NC} test "
+        else
+          STATUS_LINE="${STATUS_LINE}${RED}✗${NC} test "
+        fi
+      fi
+    else
+      STATUS_LINE="${STATUS_LINE}${CYAN}⠿${NC} test "
+    fi
+
+    # Check docs
+    if ! kill -0 $DOCS_PID 2>/dev/null; then
+      BUILDS_COMPLETE=$((BUILDS_COMPLETE + 1))
+      if [ -f "$TEMP_DIR/docs.exit" ]; then
+        DOCS_STATUS=$(cat "$TEMP_DIR/docs.exit")
+        if [ "$DOCS_STATUS" = "SUCCESS" ]; then
+          STATUS_LINE="${STATUS_LINE}${GREEN}✓${NC} docs"
+        else
+          STATUS_LINE="${STATUS_LINE}${RED}✗${NC} docs"
+        fi
+      fi
+    else
+      STATUS_LINE="${STATUS_LINE}${CYAN}⠿${NC} docs"
+    fi
+
+    printf "\r  Status: $STATUS_LINE ($BUILDS_COMPLETE/$TOTAL_BUILDS complete)   "
+
+    if [ $BUILDS_COMPLETE -lt $TOTAL_BUILDS ]; then
+      sleep 1
+    fi
+  done
+
+  echo ""
+  echo ""
+
+  # Wait for all processes to fully complete and get exit codes
+  wait $BACKEND_PID 2>/dev/null || true
+  wait $TEST_PID 2>/dev/null || true
+  wait $DOCS_PID 2>/dev/null || true
+
+  # Check results and report
+  BACKEND_RESULT=$(cat "$TEMP_DIR/backend.exit" 2>/dev/null || echo "UNKNOWN")
+  TEST_RESULT=$(cat "$TEMP_DIR/test.exit" 2>/dev/null || echo "UNKNOWN")
+  DOCS_RESULT=$(cat "$TEMP_DIR/docs.exit" 2>/dev/null || echo "UNKNOWN")
+
+  BUILD_FAILED=false
+
+  if [ "$BACKEND_RESULT" = "SUCCESS" ]; then
+    print_status "Backend image built and pushed: $DOCKER_USERNAME/harness-demo:backend-latest"
+  else
+    print_error "Backend image build/push failed"
+    echo "  Check log: $TEMP_DIR/backend.log"
+    cat "$TEMP_DIR/backend.log" 2>/dev/null | tail -10
+    echo ""
+    echo "Common causes:"
+    echo "  1. Repository doesn't exist - Create 'harness-demo' at https://hub.docker.com/repository/create"
+    echo "  2. Authentication failed - Your credentials may be invalid"
+    echo "  3. No push access - Check repository permissions"
+    BUILD_FAILED=true
   fi
-  cd ..
+
+  if [ "$TEST_RESULT" = "SUCCESS" ]; then
+    print_status "Test image built and pushed: $DOCKER_USERNAME/harness-demo:test-latest"
+  else
+    print_error "Test image build/push failed (non-critical)"
+  fi
+
+  if [ "$DOCS_RESULT" = "SUCCESS" ]; then
+    print_status "Docs image built and pushed: $DOCKER_USERNAME/harness-demo:docs-latest"
+  else
+    print_error "Docs image build/push failed (non-critical)"
+  fi
 
   # Restore original markdown files (undo personalization to keep git clean)
   print_info "Restoring original documentation files..."
   if command -v git &> /dev/null && git rev-parse --git-dir > /dev/null 2>&1; then
-    # Use git to restore original files
     git checkout -- markdown/*.md 2>/dev/null || true
   else
-    # Fallback: manually restore using sed
     for mdfile in markdown/*.md; do
       if [ -f "$mdfile" ]; then
         if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -945,6 +1144,17 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
         fi
       fi
     done
+  fi
+
+  # Exit if backend build failed (critical)
+  if [ "$BUILD_FAILED" = true ]; then
+    echo ""
+    echo "To fix Docker push issues:"
+    echo "  • Go to https://hub.docker.com/repository/create"
+    echo "  • Create a repository named: harness-demo"
+    echo "  • Make it public or private (your choice)"
+    echo "  • Then re-run: ./start-demo.sh"
+    exit 1
   fi
 
   # Now create/update Docker Hub secret with authenticated credentials
@@ -1009,6 +1219,21 @@ if [ "$SKIP_TERRAFORM" = false ]; then
 
   # Configuration file
   CONFIG_FILE=".demo-config"
+
+  # Start terraform init early in background (if no state file and terraform is installed)
+  # This runs while user enters credentials, saving time
+  EARLY_TF_INIT_PID=""
+  if [ ! -f "kit/terraform.tfstate" ] || [ ! -s "kit/terraform.tfstate" ]; then
+    if command -v terraform &> /dev/null; then
+      print_info "Starting terraform init in background (parallel with credential collection)..."
+      (
+        cd kit
+        terraform init > "$TEMP_DIR/terraform_init.log" 2>&1
+        echo $? > "$TEMP_DIR/terraform_init.exit"
+      ) &
+      EARLY_TF_INIT_PID=$!
+    fi
+  fi
 
   # Collect required variables (or load from cache)
   HARNESS_ACCOUNT_ID=""
@@ -1303,27 +1528,67 @@ EOF
 
     cd kit
 
-    # Initialize
-    print_info "Running terraform init..."
-    if terraform init &> /dev/null; then
-      print_status "Terraform initialized"
+    # Check if early init was started, otherwise start it now
+    if [ -n "$EARLY_TF_INIT_PID" ]; then
+      TERRAFORM_INIT_PID=$EARLY_TF_INIT_PID
+      print_info "Terraform init was started earlier (parallel with credential collection)"
+    else
+      # Start terraform init now
+      print_info "Starting terraform init..."
+      (
+        terraform init > "$TEMP_DIR/terraform_init.log" 2>&1
+        echo $? > "$TEMP_DIR/terraform_init.exit"
+      ) &
+      TERRAFORM_INIT_PID=$!
+    fi
+
+    # Wait for init to complete (should already be done or nearly done)
+    print_info "Waiting for terraform init to complete..."
+    if wait_with_spinner $TERRAFORM_INIT_PID "Initializing Terraform providers..."; then
+      INIT_EXIT=$(cat "$TEMP_DIR/terraform_init.exit" 2>/dev/null || echo "1")
+      if [ "$INIT_EXIT" = "0" ]; then
+        print_status "Terraform initialized"
+      else
+        print_error "Terraform init failed"
+        cat "$TEMP_DIR/terraform_init.log" 2>/dev/null | tail -10
+        cd ..
+        exit 1
+      fi
     else
       print_error "Terraform init failed"
+      cat "$TEMP_DIR/terraform_init.log" 2>/dev/null | tail -10
       cd ..
       exit 1
     fi
 
     # Plan
-    print_info "Running terraform plan (this may take 1-2 minutes)..."
-    if terraform plan -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan &> /dev/null; then
-      print_status "Terraform plan created"
+    print_info "Running terraform plan..."
+    (
+      terraform plan -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan > "$TEMP_DIR/terraform_plan.log" 2>&1
+      echo $? > "$TEMP_DIR/terraform_plan.exit"
+    ) &
+    PLAN_PID=$!
+
+    if wait_with_spinner $PLAN_PID "Creating Terraform plan (1-2 minutes)..."; then
+      PLAN_EXIT=$(cat "$TEMP_DIR/terraform_plan.exit" 2>/dev/null || echo "1")
+      if [ "$PLAN_EXIT" = "0" ]; then
+        print_status "Terraform plan created"
+      else
+        print_error "Terraform plan failed"
+        echo ""
+        cat "$TEMP_DIR/terraform_plan.log" 2>/dev/null | tail -20
+        echo ""
+        print_info "Run manually to see full errors: cd kit && terraform plan -var=\"pat=\$HARNESS_PAT\" -var-file=\"se-parms.tfvars\""
+        cd ..
+        exit 1
+      fi
     else
-      print_error "Terraform plan failed. Run manually to see errors: cd kit && terraform plan -var=\"pat=$HARNESS_PAT\" -var-file=\"se-parms.tfvars\""
+      print_error "Terraform plan failed"
       cd ..
       exit 1
     fi
 
-    # Apply
+    # Apply (show output for visibility)
     print_info "Running terraform apply (this may take 3-5 minutes)..."
     if terraform apply -auto-approve plan.tfplan; then
       print_status "Terraform apply completed - Harness resources created!"
@@ -1340,6 +1605,40 @@ else
   print_info "Skipping Terraform setup (--skip-terraform flag used)"
 fi
 
+# Check if Prometheus background deployment completed (if we started one)
+if [ -n "$PROMETHEUS_PID" ]; then
+  print_section "Waiting for Background Tasks"
+
+  # Check if Prometheus deployment is still running
+  if kill -0 $PROMETHEUS_PID 2>/dev/null; then
+    print_info "Waiting for Prometheus deployment to complete..."
+    wait_with_spinner $PROMETHEUS_PID "Deploying Prometheus..."
+  fi
+
+  # Check result
+  if [ -f "$TEMP_DIR/prometheus_status" ]; then
+    PROM_STATUS=$(cat "$TEMP_DIR/prometheus_status")
+    case "$PROM_STATUS" in
+      "DEPLOYED")
+        print_status "Prometheus deployed successfully"
+        ;;
+      "REDEPLOYED")
+        print_status "Prometheus redeployed successfully"
+        ;;
+      *)
+        print_status "Prometheus deployment completed"
+        ;;
+    esac
+  else
+    # Check if Prometheus is actually running
+    if kubectl get pods -n monitoring -l app=prometheus 2>/dev/null | grep -q "Running"; then
+      print_status "Prometheus is running"
+    else
+      print_error "Prometheus may have failed to deploy. Check: kubectl get pods -n monitoring"
+    fi
+  fi
+fi
+
 # Display status
 print_section "Infrastructure Status"
 
@@ -1349,7 +1648,7 @@ kubectl get nodes
 
 echo ""
 echo "Prometheus Status:"
-kubectl get pods -n monitoring
+kubectl get pods -n monitoring 2>/dev/null || echo "  (monitoring namespace not found)"
 
 if [ "$K8S_TYPE" = "minikube" ]; then
   echo ""

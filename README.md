@@ -69,6 +69,8 @@ This training consists of four progressive sections:
   - **macOS (Intel)**: Choose one - [minikube](https://minikube.sigs.k8s.io/docs/start/), [Colima](https://github.com/abiosoft/colima), [Docker Desktop](https://www.docker.com/products/docker-desktop), or [Rancher Desktop](https://rancherdesktop.io/)
   - **Windows**: [minikube](https://minikube.sigs.k8s.io/docs/start/) (recommended), [Docker Desktop](https://www.docker.com/products/docker-desktop), or [Rancher Desktop](https://rancherdesktop.io/)
   - **Linux**: [minikube](https://minikube.sigs.k8s.io/docs/start/) or your preferred K8s distribution
+- **Minimum Cluster Resources**: 4 CPU cores and 8GB memory
+  - The `start-demo.sh` script validates cluster resources and provides remediation guidance if insufficient
 - **kubectl**: Kubernetes CLI (usually included with above tools)
 - **Helm**: Kubernetes package manager
 - **Terraform**: Infrastructure as Code tool (v1.0+)
@@ -189,11 +191,12 @@ The `start-demo.sh` script automates the **complete demo setup** from local infr
   - Other platforms: Flexible (minikube, Colima, Docker Desktop, Rancher Desktop)
 - Automatically starts Colima/minikube if needed
 - Verifies cluster architecture (ensures AMD64 for Apple Silicon)
+- **Validates cluster resources** (minimum 4 CPU cores, 8GB memory) with remediation guidance
 
-**3. Prometheus Deployment**
+**3. Prometheus Deployment** (Background)
 - Creates monitoring namespace if it doesn't exist
-- Deploys Prometheus for continuous verification metrics
-- Waits for Prometheus to be ready
+- **Deploys Prometheus in background** (non-blocking - runs while Docker builds)
+- Verifies Prometheus status at end of script
 
 **4. Docker Hub Authentication** (Smart Detection)
 - **If already logged in** (via Docker Desktop): Uses existing credentials automatically
@@ -204,10 +207,12 @@ The `start-demo.sh` script automates the **complete demo setup** from local infr
 - Saves your username to `.demo-config` for future runs
 - Prompts for login with helpful instructions about using a Personal Access Token (PAT)
 
-**5. Backend Image Build & Push**
-- Builds the Django backend Docker image
+**5. Docker Image Builds** (Parallel!)
+- **Builds all three images simultaneously** (backend, test, docs) in parallel
+- Progress tracking shows status of each build in real-time
 - Pushes to your Docker Hub repository
 - Provides clear error messages if build or push fails
+- **Saves 2-4 minutes** vs sequential builds
 
 **6. Harness Configuration & IaC Provisioning** (Automated!)
 - **Smart credential collection**: Reuses values from previous runs or prompts for:
@@ -248,7 +253,7 @@ The `start-demo.sh` script automates the **complete demo setup** from local infr
 - Validates project name doesn't use reserved words or conflict with existing projects
 - Saves all credentials to `.demo-config` for future runs
 - Creates Harness resources via Terraform
-- Takes ~8-12 minutes total (including Docker build and IaC provisioning)
+- Takes ~6-10 minutes total (parallel Docker builds + IaC provisioning)
 
 **Subsequent Runs:**
 - Detects existing state file and skips Harness resource creation
