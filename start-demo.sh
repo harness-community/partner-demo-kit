@@ -127,21 +127,33 @@ print_section() {
 check_cluster_resources() {
   print_section "Checking Cluster Resources"
 
-  # Get node resources using kubectl
-  local node_info
-  node_info=$(kubectl get nodes -o json 2>/dev/null)
+  # Wait for cluster to be ready (API server may need a moment after fresh start)
+  print_info "Waiting for cluster API to be ready..."
+  local retries=0
+  local max_retries=30
+  while [ $retries -lt $max_retries ]; do
+    if kubectl get nodes &> /dev/null; then
+      print_status "Cluster API is ready"
+      break
+    fi
+    retries=$((retries + 1))
+    sleep 2
+  done
 
-  if [ -z "$node_info" ]; then
-    print_error "Cannot retrieve cluster node information"
+  if [ $retries -eq $max_retries ]; then
+    print_error "Cluster API did not become ready in time"
     return 1
   fi
 
-  # Extract allocatable CPU and memory from the first node
-  # CPU is in cores or millicores (e.g., "4" or "4000m")
-  # Memory is in bytes or Ki/Mi/Gi (e.g., "8Gi" or "8388608Ki")
+  # Get node resources using kubectl with jsonpath for more reliable parsing
   local cpu_raw memory_raw
-  cpu_raw=$(echo "$node_info" | grep -o '"allocatable":{[^}]*}' | head -1 | grep -o '"cpu":"[^"]*"' | cut -d'"' -f4)
-  memory_raw=$(echo "$node_info" | grep -o '"allocatable":{[^}]*}' | head -1 | grep -o '"memory":"[^"]*"' | cut -d'"' -f4)
+  cpu_raw=$(kubectl get nodes -o jsonpath='{.items[0].status.allocatable.cpu}' 2>/dev/null || true)
+  memory_raw=$(kubectl get nodes -o jsonpath='{.items[0].status.allocatable.memory}' 2>/dev/null || true)
+
+  if [ -z "$cpu_raw" ] || [ -z "$memory_raw" ]; then
+    print_error "Cannot retrieve cluster node information"
+    return 1
+  fi
 
   # Parse CPU (convert millicores to cores if needed)
   local cpu_cores
@@ -151,15 +163,35 @@ check_cluster_resources() {
     cpu_cores=$cpu_raw
   fi
 
-  # Parse memory (convert to GB)
+  # Parse memory (convert to GB) - handle Ki suffix properly
   local memory_gb
+  local memory_num
   case "$memory_raw" in
-    *Gi) memory_gb=${memory_raw%Gi} ;;
-    *G)  memory_gb=${memory_raw%G} ;;
-    *Mi) memory_gb=$(( ${memory_raw%Mi} / 1024 )) ;;
-    *Ki) memory_gb=$(( ${memory_raw%Ki} / 1024 / 1024 )) ;;
-    *)   memory_gb=$(( memory_raw / 1024 / 1024 / 1024 )) ;;
+    *Gi)
+      memory_gb=${memory_raw%Gi}
+      ;;
+    *G)
+      memory_gb=${memory_raw%G}
+      ;;
+    *Mi)
+      memory_num=${memory_raw%Mi}
+      memory_gb=$(( memory_num / 1024 ))
+      ;;
+    *Ki)
+      memory_num=${memory_raw%Ki}
+      # Use awk for larger numbers to avoid bash integer overflow
+      memory_gb=$(echo "$memory_num" | awk '{printf "%.0f", $1 / 1024 / 1024}')
+      ;;
+    *)
+      # Raw bytes - use awk for large numbers
+      memory_gb=$(echo "$memory_raw" | awk '{printf "%.0f", $1 / 1024 / 1024 / 1024}')
+      ;;
   esac
+
+  # Ensure memory_gb is a valid number (default to 0 if parsing failed)
+  if ! [[ "$memory_gb" =~ ^[0-9]+$ ]]; then
+    memory_gb=0
+  fi
 
   print_info "Cluster resources: ${cpu_cores} CPU cores, ${memory_gb}GB memory"
 
@@ -188,21 +220,76 @@ check_cluster_resources() {
     echo "The demo requires at least ${MIN_CPU_CORES} CPU cores and ${MIN_MEMORY_GB}GB memory."
     echo ""
 
-    # Provide platform-specific remediation instructions
+    # Offer automatic remediation for Colima and minikube
     if [ "$K8S_TYPE" = "colima" ]; then
-      echo "To increase Colima resources:"
-      echo "  colima stop"
-      echo "  colima delete"
-      if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
-        echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu ${MIN_CPU_CORES} --memory ${MIN_MEMORY_GB} --kubernetes"
+      echo "Would you like to automatically restart Colima with the correct resources?"
+      echo "This will stop and delete the current Colima VM, then create a new one."
+      echo ""
+      read -p "Restart Colima with ${MIN_CPU_CORES} CPUs and ${MIN_MEMORY_GB}GB memory? [Y/n]: " RESTART_COLIMA
+      RESTART_COLIMA=${RESTART_COLIMA:-yes}
+
+      if [[ "$RESTART_COLIMA" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+        print_info "Stopping Colima..."
+        colima stop 2>/dev/null || true
+        print_info "Deleting Colima VM and runtime data..."
+        colima delete -f --data 2>/dev/null || true
+        print_info "Starting Colima with correct resources (this may take 5-10 minutes)..."
+        if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
+          if colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu ${MIN_CPU_CORES} --memory ${MIN_MEMORY_GB} --kubernetes --runtime docker; then
+            print_status "Colima restarted successfully with ${MIN_CPU_CORES} CPUs and ${MIN_MEMORY_GB}GB memory"
+            return 0  # Resources are now OK
+          else
+            print_error "Failed to restart Colima"
+            exit 1
+          fi
+        else
+          if colima start --cpu ${MIN_CPU_CORES} --memory ${MIN_MEMORY_GB} --kubernetes; then
+            print_status "Colima restarted successfully with ${MIN_CPU_CORES} CPUs and ${MIN_MEMORY_GB}GB memory"
+            return 0  # Resources are now OK
+          else
+            print_error "Failed to restart Colima"
+            exit 1
+          fi
+        fi
       else
-        echo "  colima start --cpu ${MIN_CPU_CORES} --memory ${MIN_MEMORY_GB} --kubernetes"
+        echo ""
+        echo "To manually increase Colima resources:"
+        echo "  colima stop"
+        echo "  colima delete --data"
+        if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
+          echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu ${MIN_CPU_CORES} --memory ${MIN_MEMORY_GB} --kubernetes --runtime docker"
+        else
+          echo "  colima start --cpu ${MIN_CPU_CORES} --memory ${MIN_MEMORY_GB} --kubernetes"
+        fi
       fi
     elif [ "$K8S_TYPE" = "minikube" ]; then
-      echo "To increase minikube resources:"
-      echo "  minikube stop"
-      echo "  minikube delete"
-      echo "  minikube start --cpus=${MIN_CPU_CORES} --memory=${MIN_MEMORY_GB}g"
+      echo "Would you like to automatically restart minikube with the correct resources?"
+      echo "This will stop and delete the current minikube cluster, then create a new one."
+      echo ""
+      read -p "Restart minikube with ${MIN_CPU_CORES} CPUs and ${MIN_MEMORY_GB}GB memory? [Y/n]: " RESTART_MINIKUBE
+      RESTART_MINIKUBE=${RESTART_MINIKUBE:-yes}
+
+      if [[ "$RESTART_MINIKUBE" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+        print_info "Stopping minikube..."
+        minikube stop 2>/dev/null || true
+        print_info "Deleting minikube cluster..."
+        minikube delete 2>/dev/null || true
+        print_info "Starting minikube with correct resources..."
+        if minikube start --cpus=${MIN_CPU_CORES} --memory=${MIN_MEMORY_GB}g; then
+          print_status "minikube restarted successfully with ${MIN_CPU_CORES} CPUs and ${MIN_MEMORY_GB}GB memory"
+          minikube addons enable metrics-server &> /dev/null || true
+          return 0  # Resources are now OK
+        else
+          print_error "Failed to restart minikube"
+          exit 1
+        fi
+      else
+        echo ""
+        echo "To manually increase minikube resources:"
+        echo "  minikube stop"
+        echo "  minikube delete"
+        echo "  minikube start --cpus=${MIN_CPU_CORES} --memory=${MIN_MEMORY_GB}g"
+      fi
     elif [ "$K8S_TYPE" = "docker-desktop" ]; then
       echo "To increase Docker Desktop resources:"
       echo "  1. Open Docker Desktop > Settings > Resources"
@@ -321,7 +408,7 @@ if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]
     else
       echo ""
       echo "To start Colima with AMD64 emulation after installing dependencies:"
-      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker"
       echo ""
       echo "Note: First startup may take 5-10 minutes while downloading images."
       echo ""
@@ -350,17 +437,17 @@ if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]
         if [[ "$RESTART_COLIMA" =~ ^[Yy]([Ee][Ss])?$ ]]; then
           print_info "Stopping Colima..."
           colima stop
-          print_info "Deleting Colima VM..."
-          colima delete
-          print_info "Starting Colima with AMD64 emulation (this may take 5-10 minutes)..."
-          colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes
+          print_info "Deleting Colima VM and runtime data..."
+          colima delete --data -f
+          print_info "Starting Colima with AMD64 emulation and docker runtime (this may take 5-10 minutes)..."
+          colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker
           print_status "Colima started successfully with AMD64 emulation"
         else
           print_error "Cannot proceed without AMD64 architecture"
           echo ""
           echo "To restart manually:"
-          echo "  colima stop && colima delete"
-          echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+          echo "  colima stop && colima delete --data"
+          echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker"
           echo ""
           K8S_TOOL_MISSING=true
         fi
@@ -368,14 +455,21 @@ if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]
     else
       print_info "Colima is not running - starting it now..."
       echo ""
-      print_info "Starting Colima with AMD64 emulation (this may take 5-10 minutes on first run)..."
-      if colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes; then
-        print_status "Colima started successfully"
+
+      # Always clean up old runtime data before starting
+      # This ensures a clean start
+      print_info "Cleaning up any existing Colima data (required for docker runtime)..."
+      colima delete --data -f 2>/dev/null || true
+
+      print_info "Starting Colima with AMD64 emulation and docker runtime (this may take 5-10 minutes on first run)..."
+      if colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker; then
+        print_status "Colima started successfully with docker runtime"
       else
         print_error "Failed to start Colima"
         echo ""
         echo "Please try starting manually:"
-        echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+        echo "  colima delete --data"
+        echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker"
         echo ""
         K8S_TOOL_MISSING=true
       fi
@@ -466,12 +560,16 @@ if ! command -v kubectl &> /dev/null; then
 fi
 print_status "kubectl found: $(kubectl version --client --short 2>/dev/null || kubectl version --client 2>&1 | head -n1)"
 
-# Check if Docker is running
-if ! docker info &> /dev/null; then
-  print_error "Docker is not running. Please start Docker Desktop."
+# Verify Docker daemon is ready
+print_info "Checking container runtime availability..."
+if docker info &> /dev/null; then
+  print_status "Docker daemon is running"
+else
+  print_error "Docker daemon is not running"
+  echo ""
+  echo "Please start Docker Desktop or your container runtime platform."
   exit 1
 fi
-print_status "Docker daemon is running"
 
 # Detect Kubernetes environment
 print_section "Detecting Kubernetes Environment"
@@ -482,15 +580,33 @@ if kubectl config current-context 2>/dev/null | grep -q "colima"; then
   print_status "Detected Colima"
   # Verify architecture for Colima on Apple Silicon
   if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
-    CLUSTER_ARCH=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.architecture}' 2>/dev/null)
+    # Wait for cluster to be ready before checking architecture
+    print_info "Checking cluster architecture (waiting for API to be ready)..."
+    CLUSTER_ARCH=""
+    ARCH_RETRIES=0
+    ARCH_MAX_RETRIES=30
+    while [ $ARCH_RETRIES -lt $ARCH_MAX_RETRIES ]; do
+      CLUSTER_ARCH=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.architecture}' 2>/dev/null || true)
+      if [ -n "$CLUSTER_ARCH" ]; then
+        break
+      fi
+      ARCH_RETRIES=$((ARCH_RETRIES + 1))
+      sleep 2
+    done
+
+    if [ -z "$CLUSTER_ARCH" ]; then
+      print_error "Could not determine cluster architecture (API not ready after 60 seconds)"
+      exit 1
+    fi
+
     if [ "$CLUSTER_ARCH" = "amd64" ]; then
       print_status "Cluster is running AMD64 (correct for Harness Cloud compatibility)"
     else
       print_error "Cluster is running $CLUSTER_ARCH architecture (expected amd64)"
       echo ""
       echo "Please restart Colima with AMD64 emulation:"
-      echo "  colima stop && colima delete"
-      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+      echo "  colima stop && colima delete --data"
+      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker"
       exit 1
     fi
   fi
@@ -513,7 +629,7 @@ else
     echo ""
     if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
       echo "For Apple Silicon Macs, start Colima:"
-      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker"
     else
       echo "Please ensure one of the following is running:"
       echo "  - minikube (run 'minikube start')"
@@ -531,7 +647,7 @@ if [ "$K8S_TYPE" = "colima" ]; then
   if ! colima status &> /dev/null; then
     print_info "Starting Colima (this may take 5-10 minutes on first run)..."
     if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
-      colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes
+      colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker
     else
       colima start --cpu 4 --memory 8 --kubernetes
     fi
@@ -559,16 +675,51 @@ fi
 
 # Verify cluster connectivity
 print_section "Verifying Cluster Connectivity"
-if kubectl cluster-info &> /dev/null; then
-  print_status "Successfully connected to Kubernetes cluster"
-  print_info "Cluster: $(kubectl config current-context)"
-else
-  print_error "Cannot connect to Kubernetes cluster"
+
+# Wait for cluster API to be ready (may need a moment after fresh start)
+print_info "Waiting for cluster API to be ready..."
+RETRIES=0
+MAX_RETRIES=30
+while [ $RETRIES -lt $MAX_RETRIES ]; do
+  if kubectl cluster-info &> /dev/null; then
+    print_status "Successfully connected to Kubernetes cluster"
+    print_info "Cluster: $(kubectl config current-context)"
+    break
+  fi
+  RETRIES=$((RETRIES + 1))
+  sleep 2
+done
+
+if [ $RETRIES -eq $MAX_RETRIES ]; then
+  print_error "Cannot connect to Kubernetes cluster after waiting 60 seconds"
+  echo ""
+  echo "Troubleshooting tips:"
+  if [ "$K8S_TYPE" = "colima" ]; then
+    echo "  1. Check Colima status: colima status"
+    if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
+      echo "  2. Try restarting Colima: colima stop && colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker"
+    else
+      echo "  2. Try restarting Colima: colima stop && colima start --cpu 4 --memory 8 --kubernetes"
+    fi
+  elif [ "$K8S_TYPE" = "minikube" ]; then
+    echo "  1. Check minikube status: minikube status"
+    echo "  2. Try restarting minikube: minikube stop && minikube start"
+  fi
+  echo "  3. Check kubectl config: kubectl config current-context"
   exit 1
 fi
 
 # Check cluster resources (CPU and memory)
 check_cluster_resources
+
+# Ensure harness-delegate-ng namespace exists (for delegate installation later)
+print_info "Ensuring harness-delegate-ng namespace exists..."
+if ! kubectl get namespace harness-delegate-ng &> /dev/null; then
+  kubectl create namespace harness-delegate-ng &> /dev/null
+  print_status "Created harness-delegate-ng namespace"
+else
+  print_status "harness-delegate-ng namespace already exists"
+fi
 
 # Create Docker Hub secret for pulling images
 print_section "Creating Docker Hub Secret for Image Pulls"
@@ -606,31 +757,27 @@ if [ -n "$DOCKER_USERNAME" ] && [ -n "$DOCKER_PAT" ] && [ "$DOCKER_PAT" != "logg
     print_error "Failed to create Docker Hub secret in default namespace"
   fi
 
-  # Create secret in harness-delegate-ng namespace (if it exists)
-  if kubectl get namespace harness-delegate-ng &> /dev/null; then
-    if kubectl get secret dockerhub-pull -n harness-delegate-ng &> /dev/null; then
-      print_info "Updating existing Docker Hub secret in harness-delegate-ng namespace..."
-      kubectl delete secret dockerhub-pull -n harness-delegate-ng &> /dev/null
-    fi
+  # Create secret in harness-delegate-ng namespace
+  if kubectl get secret dockerhub-pull -n harness-delegate-ng &> /dev/null; then
+    print_info "Updating existing Docker Hub secret in harness-delegate-ng namespace..."
+    kubectl delete secret dockerhub-pull -n harness-delegate-ng &> /dev/null
+  fi
 
-    kubectl create secret docker-registry dockerhub-pull \
-      --docker-server=https://index.docker.io/v1/ \
-      --docker-username="$DOCKER_USERNAME" \
-      --docker-password="$DOCKER_PAT" \
-      --docker-email="${DOCKER_USERNAME}@example.com" \
-      -n harness-delegate-ng &> /dev/null
+  kubectl create secret docker-registry dockerhub-pull \
+    --docker-server=https://index.docker.io/v1/ \
+    --docker-username="$DOCKER_USERNAME" \
+    --docker-password="$DOCKER_PAT" \
+    --docker-email="${DOCKER_USERNAME}@example.com" \
+    -n harness-delegate-ng &> /dev/null
 
-    if [ $? -eq 0 ]; then
-      print_status "Docker Hub secret created in harness-delegate-ng namespace"
+  if [ $? -eq 0 ]; then
+    print_status "Docker Hub secret created in harness-delegate-ng namespace"
 
-      # Attach secret to default service account
-      kubectl patch serviceaccount default -n harness-delegate-ng -p '{"imagePullSecrets": [{"name": "dockerhub-pull"}]}' &> /dev/null
-      print_status "Attached secret to default service account in harness-delegate-ng"
-    else
-      print_error "Failed to create Docker Hub secret in harness-delegate-ng namespace"
-    fi
+    # Attach secret to default service account
+    kubectl patch serviceaccount default -n harness-delegate-ng -p '{"imagePullSecrets": [{"name": "dockerhub-pull"}]}' &> /dev/null
+    print_status "Attached secret to default service account in harness-delegate-ng"
   else
-    print_info "harness-delegate-ng namespace not found, skipping secret creation there"
+    print_error "Failed to create Docker Hub secret in harness-delegate-ng namespace"
   fi
 
   # Attach secret to default service account in default namespace
@@ -860,9 +1007,29 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
       print_info "Logging in to Docker Hub as $DOCKER_USERNAME..."
     fi
 
-    # Attempt Docker login and capture any errors
-    LOGIN_OUTPUT=$(echo "$DOCKER_LOGIN_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1)
+    # Verify we have a password to use
+    if [ -z "$DOCKER_LOGIN_PASSWORD" ]; then
+      print_error "Docker password is empty - cannot log in"
+      echo ""
+      read -sp "Enter your Docker Hub password/PAT: " DOCKER_LOGIN_PASSWORD
+      echo ""
+    fi
+
+    # Attempt Docker login
+    set +e
+    LOGIN_OUTPUT=$(printf '%s' "$DOCKER_LOGIN_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1)
     LOGIN_EXIT_CODE=$?
+    set -e
+
+    # Retry on network timeout (Docker daemon may need a moment after fresh start)
+    if [ $LOGIN_EXIT_CODE -ne 0 ] && echo "$LOGIN_OUTPUT" | grep -q "Client.Timeout exceeded\|connection timed out\|connection refused"; then
+      print_info "Docker daemon may still be initializing, retrying login in 5 seconds..."
+      sleep 5
+      set +e
+      LOGIN_OUTPUT=$(printf '%s' "$DOCKER_LOGIN_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1)
+      LOGIN_EXIT_CODE=$?
+      set -e
+    fi
 
     if [ $LOGIN_EXIT_CODE -eq 0 ]; then
       print_status "Successfully logged in to Docker Hub"
@@ -888,15 +1055,41 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
 
         # Retry Docker login
         print_info "Retrying Docker login..."
-        if echo "$DOCKER_LOGIN_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1; then
+        set +e
+        LOGIN_OUTPUT=$(printf '%s' "$DOCKER_LOGIN_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1)
+        LOGIN_EXIT_CODE=$?
+        set -e
+
+        if [ $LOGIN_EXIT_CODE -eq 0 ]; then
           print_status "Successfully logged in to Docker Hub"
         else
           print_error "Docker login failed. Please check your credentials."
           exit 1
         fi
       else
-        print_error "Docker login failed: $LOGIN_OUTPUT"
-        print_error "Please check your credentials and try again."
+        # Distinguish between network and authentication errors
+        if echo "$LOGIN_OUTPUT" | grep -q "Client.Timeout exceeded\|connection timed out\|connection refused\|network\|dial"; then
+          print_error "Docker login failed: Network connectivity issue"
+          echo ""
+          echo "$LOGIN_OUTPUT"
+          echo ""
+          print_info "Possible causes:"
+          print_info "  - Docker daemon not fully ready (wait a moment and retry)"
+          print_info "  - Network connectivity issues"
+          print_info "  - Firewall blocking Docker Hub access"
+          echo ""
+          print_info "Try rerunning: ./start-demo.sh"
+        elif echo "$LOGIN_OUTPUT" | grep -q "unauthorized\|incorrect\|denied"; then
+          print_error "Docker login failed: Invalid credentials"
+          echo ""
+          echo "$LOGIN_OUTPUT"
+          echo ""
+          print_info "Please verify your Docker Hub username and password/PAT"
+          print_info "Delete .demo-config and re-run to enter new credentials"
+        else
+          print_error "Docker login failed: $LOGIN_OUTPUT"
+          print_error "Please check your credentials and try again."
+        fi
         exit 1
       fi
     fi
@@ -912,20 +1105,9 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
     fi
   fi
 
-  # Detect architecture
-  ARCH=$(uname -m)
-  BUILD_PLATFORM=""
-
-  if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
-    print_info "Detected Apple Silicon (ARM64) - building for amd64 (Harness Cloud compatibility)"
-    BUILD_PLATFORM="linux/amd64"
-    BUILD_CMD="docker buildx build --platform $BUILD_PLATFORM"
-    PUSH_FLAG="--push"
-  else
-    print_info "Detected Intel/AMD architecture - building natively"
-    BUILD_CMD="docker build"
-    PUSH_FLAG=""
-  fi
+  # Show Docker daemon architecture (with Colima x86_64 mode, this should be amd64)
+  DOCKER_ARCH=$(docker info --format '{{.Architecture}}' 2>/dev/null || echo 'unknown')
+  print_info "Docker daemon architecture: $DOCKER_ARCH"
 
   # Prepare documentation files before parallel builds
   print_info "Preparing documentation for build..."
@@ -967,168 +1149,45 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
   fi
 
   # ============================================================
-  # PARALLEL DOCKER BUILDS - Build all images simultaneously
+  # SEQUENTIAL DOCKER BUILDS - Build images one at a time
   # ============================================================
-  print_section "Building Docker Images (Parallel)"
+  print_section "Building Docker Images"
   echo ""
-  print_info "Building 3 images in parallel: backend, test, docs"
-  print_info "This significantly reduces total build time"
+  print_info "Building 3 images: backend, test, docs"
   echo ""
-
-  # Function to build and push an image
-  build_image() {
-    local name=$1
-    local dir=$2
-    local tag=$3
-    local log_file="$TEMP_DIR/${name}.log"
-    local exit_file="$TEMP_DIR/${name}.exit"
-
-    {
-      cd "$dir"
-      if [ -n "$PUSH_FLAG" ]; then
-        # ARM64: Use buildx with --push
-        if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:$tag" $PUSH_FLAG . --quiet 2>&1; then
-          echo "SUCCESS" > "$exit_file"
-        else
-          echo "FAILED" > "$exit_file"
-        fi
-      else
-        # Intel/AMD: Build then push
-        if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:$tag" . --quiet 2>&1; then
-          if docker push "$DOCKER_USERNAME/harness-demo:$tag" --quiet 2>&1; then
-            echo "SUCCESS" > "$exit_file"
-          else
-            echo "PUSH_FAILED" > "$exit_file"
-          fi
-        else
-          echo "BUILD_FAILED" > "$exit_file"
-        fi
-      fi
-      cd - > /dev/null
-    } > "$log_file" 2>&1
-  }
-
-  # Get absolute path for parallel builds
-  REPO_ROOT=$(pwd)
-
-  # Start all builds in parallel
-  build_image "backend" "$REPO_ROOT/backend" "backend-latest" &
-  BACKEND_PID=$!
-
-  build_image "test" "$REPO_ROOT/python-tests" "test-latest" &
-  TEST_PID=$!
-
-  build_image "docs" "$REPO_ROOT/markdown" "docs-latest" &
-  DOCS_PID=$!
-
-  echo "  Backend image (PID: $BACKEND_PID)"
-  echo "  Test image    (PID: $TEST_PID)"
-  echo "  Docs image    (PID: $DOCS_PID)"
-  echo ""
-
-  # Wait for all builds with progress indicator
-  print_info "Building images... (this may take 2-5 minutes)"
-
-  # Track completion status
-  BUILDS_COMPLETE=0
-  TOTAL_BUILDS=3
-
-  while [ $BUILDS_COMPLETE -lt $TOTAL_BUILDS ]; do
-    BUILDS_COMPLETE=0
-    STATUS_LINE=""
-
-    # Check backend
-    if ! kill -0 $BACKEND_PID 2>/dev/null; then
-      BUILDS_COMPLETE=$((BUILDS_COMPLETE + 1))
-      if [ -f "$TEMP_DIR/backend.exit" ]; then
-        BACKEND_STATUS=$(cat "$TEMP_DIR/backend.exit")
-        if [ "$BACKEND_STATUS" = "SUCCESS" ]; then
-          STATUS_LINE="${STATUS_LINE}${GREEN}✓${NC} backend "
-        else
-          STATUS_LINE="${STATUS_LINE}${RED}✗${NC} backend "
-        fi
-      fi
-    else
-      STATUS_LINE="${STATUS_LINE}${CYAN}⠿${NC} backend "
-    fi
-
-    # Check test
-    if ! kill -0 $TEST_PID 2>/dev/null; then
-      BUILDS_COMPLETE=$((BUILDS_COMPLETE + 1))
-      if [ -f "$TEMP_DIR/test.exit" ]; then
-        TEST_STATUS=$(cat "$TEMP_DIR/test.exit")
-        if [ "$TEST_STATUS" = "SUCCESS" ]; then
-          STATUS_LINE="${STATUS_LINE}${GREEN}✓${NC} test "
-        else
-          STATUS_LINE="${STATUS_LINE}${RED}✗${NC} test "
-        fi
-      fi
-    else
-      STATUS_LINE="${STATUS_LINE}${CYAN}⠿${NC} test "
-    fi
-
-    # Check docs
-    if ! kill -0 $DOCS_PID 2>/dev/null; then
-      BUILDS_COMPLETE=$((BUILDS_COMPLETE + 1))
-      if [ -f "$TEMP_DIR/docs.exit" ]; then
-        DOCS_STATUS=$(cat "$TEMP_DIR/docs.exit")
-        if [ "$DOCS_STATUS" = "SUCCESS" ]; then
-          STATUS_LINE="${STATUS_LINE}${GREEN}✓${NC} docs"
-        else
-          STATUS_LINE="${STATUS_LINE}${RED}✗${NC} docs"
-        fi
-      fi
-    else
-      STATUS_LINE="${STATUS_LINE}${CYAN}⠿${NC} docs"
-    fi
-
-    printf "\r  Status: $STATUS_LINE ($BUILDS_COMPLETE/$TOTAL_BUILDS complete)   "
-
-    if [ $BUILDS_COMPLETE -lt $TOTAL_BUILDS ]; then
-      sleep 1
-    fi
-  done
-
-  echo ""
-  echo ""
-
-  # Wait for all processes to fully complete and get exit codes
-  wait $BACKEND_PID 2>/dev/null || true
-  wait $TEST_PID 2>/dev/null || true
-  wait $DOCS_PID 2>/dev/null || true
-
-  # Check results and report
-  BACKEND_RESULT=$(cat "$TEMP_DIR/backend.exit" 2>/dev/null || echo "UNKNOWN")
-  TEST_RESULT=$(cat "$TEMP_DIR/test.exit" 2>/dev/null || echo "UNKNOWN")
-  DOCS_RESULT=$(cat "$TEMP_DIR/docs.exit" 2>/dev/null || echo "UNKNOWN")
 
   BUILD_FAILED=false
 
-  if [ "$BACKEND_RESULT" = "SUCCESS" ]; then
+  # Build backend image
+  print_info "Building backend image..."
+  cd backend
+  if docker build -t "$DOCKER_USERNAME/harness-demo:backend-latest" . && docker push "$DOCKER_USERNAME/harness-demo:backend-latest"; then
     print_status "Backend image built and pushed: $DOCKER_USERNAME/harness-demo:backend-latest"
   else
     print_error "Backend image build/push failed"
-    echo "  Check log: $TEMP_DIR/backend.log"
-    cat "$TEMP_DIR/backend.log" 2>/dev/null | tail -10
-    echo ""
-    echo "Common causes:"
-    echo "  1. Repository doesn't exist - Create 'harness-demo' at https://hub.docker.com/repository/create"
-    echo "  2. Authentication failed - Your credentials may be invalid"
-    echo "  3. No push access - Check repository permissions"
     BUILD_FAILED=true
   fi
+  cd ..
 
-  if [ "$TEST_RESULT" = "SUCCESS" ]; then
+  # Build test image
+  print_info "Building test image..."
+  cd python-tests
+  if docker build -t "$DOCKER_USERNAME/harness-demo:test-latest" . && docker push "$DOCKER_USERNAME/harness-demo:test-latest"; then
     print_status "Test image built and pushed: $DOCKER_USERNAME/harness-demo:test-latest"
   else
     print_error "Test image build/push failed (non-critical)"
   fi
+  cd ..
 
-  if [ "$DOCS_RESULT" = "SUCCESS" ]; then
+  # Build docs image
+  print_info "Building docs image..."
+  cd markdown
+  if docker build -t "$DOCKER_USERNAME/harness-demo:docs-latest" . && docker push "$DOCKER_USERNAME/harness-demo:docs-latest"; then
     print_status "Docs image built and pushed: $DOCKER_USERNAME/harness-demo:docs-latest"
   else
     print_error "Docs image build/push failed (non-critical)"
   fi
+  cd ..
 
   # Restore original markdown files (undo personalization to keep git clean)
   print_info "Restoring original documentation files..."
@@ -1182,28 +1241,26 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
       print_error "Failed to create Docker Hub secret in default namespace"
     fi
 
-    # Create secret in harness-delegate-ng namespace (if it exists)
-    if kubectl get namespace harness-delegate-ng &> /dev/null; then
-      if kubectl get secret dockerhub-pull -n harness-delegate-ng &> /dev/null; then
-        kubectl delete secret dockerhub-pull -n harness-delegate-ng &> /dev/null
-      fi
+    # Create secret in harness-delegate-ng namespace
+    if kubectl get secret dockerhub-pull -n harness-delegate-ng &> /dev/null; then
+      kubectl delete secret dockerhub-pull -n harness-delegate-ng &> /dev/null
+    fi
 
-      kubectl create secret docker-registry dockerhub-pull \
-        --docker-server=https://index.docker.io/v1/ \
-        --docker-username="$DOCKER_USERNAME" \
-        --docker-password="$DOCKER_LOGIN_PASSWORD" \
-        --docker-email="${DOCKER_USERNAME}@example.com" \
-        -n harness-delegate-ng &> /dev/null
+    kubectl create secret docker-registry dockerhub-pull \
+      --docker-server=https://index.docker.io/v1/ \
+      --docker-username="$DOCKER_USERNAME" \
+      --docker-password="$DOCKER_LOGIN_PASSWORD" \
+      --docker-email="${DOCKER_USERNAME}@example.com" \
+      -n harness-delegate-ng &> /dev/null
 
-      if [ $? -eq 0 ]; then
-        print_status "Docker Hub secret created/updated in harness-delegate-ng namespace"
+    if [ $? -eq 0 ]; then
+      print_status "Docker Hub secret created/updated in harness-delegate-ng namespace"
 
-        # Attach secret to default service account
-        kubectl patch serviceaccount default -n harness-delegate-ng -p '{"imagePullSecrets": [{"name": "dockerhub-pull"}]}' &> /dev/null
-        print_status "Attached secret to service account in harness-delegate-ng"
-      else
-        print_error "Failed to create Docker Hub secret in harness-delegate-ng namespace"
-      fi
+      # Attach secret to default service account
+      kubectl patch serviceaccount default -n harness-delegate-ng -p '{"imagePullSecrets": [{"name": "dockerhub-pull"}]}' &> /dev/null
+      print_status "Attached secret to service account in harness-delegate-ng"
+    else
+      print_error "Failed to create Docker Hub secret in harness-delegate-ng namespace"
     fi
 
     # Attach secret to default service account in default namespace

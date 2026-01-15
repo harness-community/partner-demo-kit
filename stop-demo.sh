@@ -11,7 +11,8 @@
 #   OPTIONS:
 #     --delete-prometheus       Also delete Prometheus monitoring
 #     --stop-cluster            Stop the Kubernetes cluster (minikube/colima)
-#     --delete-harness-project  Delete Harness project via API
+#     --delete-harness-project  Delete Harness project via Terraform/OpenTofu
+#     --force-api-delete        Delete Harness project via API (bypasses Terraform state)
 #     --delete-docker-repo      Delete Docker Hub harness-demo repository via API
 #     --delete-config-files     Delete .demo-config, se-parms.tfvars, and IaC state files
 #     --full-cleanup            Delete everything (all of the above)
@@ -31,6 +32,7 @@ DELETE_PROMETHEUS=false
 STOP_CLUSTER=false
 DELETE_COLIMA_VM=false
 DELETE_HARNESS_PROJECT=false
+FORCE_API_DELETE=false  # Skip Terraform state, delete project directly via API
 DELETE_DOCKER_REPO=false
 DELETE_CONFIG_FILES=false
 NO_INTERACTIVE=false
@@ -52,6 +54,11 @@ while [[ $# -gt 0 ]]; do
       ;;
     --delete-harness-project)
       DELETE_HARNESS_PROJECT=true
+      shift
+      ;;
+    --force-api-delete)
+      DELETE_HARNESS_PROJECT=true
+      FORCE_API_DELETE=true
       shift
       ;;
     --delete-docker-repo)
@@ -79,7 +86,8 @@ while [[ $# -gt 0 ]]; do
       echo "Usage: ./stop-demo.sh [OPTIONS]"
       echo "  --delete-prometheus       Delete Prometheus monitoring"
       echo "  --stop-cluster            Stop Kubernetes cluster (minikube/colima)"
-      echo "  --delete-harness-project  Delete Harness project"
+      echo "  --delete-harness-project  Delete Harness project via Terraform/OpenTofu"
+      echo "  --force-api-delete        Delete Harness project via API (bypasses Terraform state)"
       echo "  --delete-docker-repo      Delete Docker Hub repository"
       echo "  --delete-config-files     Delete config and state files (.demo-config, terraform state)"
       echo "  --full-cleanup            Everything except credentials (stops cluster, keeps credentials)"
@@ -105,28 +113,36 @@ show_cleanup_menu() {
   echo "   - Easy to restart demo later with: ./start-demo.sh"
   echo ""
   echo -e "${CYAN}2)${NC} Stop K8s deployments + Delete Prometheus"
-  echo "   - Same as option 1, but also removes Prometheus monitoring"
+  echo -e "   ${GREEN}Removes:${NC} Frontend, backend, Prometheus monitoring"
+  echo -e "   ${BLUE}Keeps:${NC} Harness project, cluster running, config files"
   echo ""
   echo -e "${CYAN}3)${NC} Stop K8s deployments + Stop cluster"
-  echo "   - Stops local deployments and shuts down minikube/colima"
-  echo "   - Preserves Harness resources for next time"
+  echo -e "   ${GREEN}Removes:${NC} Frontend, backend deployments"
+  echo -e "   ${GREEN}Stops:${NC} Kubernetes cluster (minikube/colima)"
+  echo -e "   ${BLUE}Keeps:${NC} Harness project, Prometheus, config files"
   echo ""
   echo -e "${CYAN}4)${NC} Full cleanup (delete all Harness resources)"
-  echo "   - Deletes Harness project"
-  echo "   - Deletes Docker Hub repository"
-  echo "   - Removes Prometheus"
-  echo "   - Keeps cluster running and config files"
+  echo -e "   ${GREEN}Removes:${NC} Harness project, Docker Hub repo, Prometheus"
+  echo -e "   ${BLUE}Keeps:${NC} Cluster running, config files"
+  echo -e "   ${YELLOW}Note:${NC} Restart requires re-running Terraform to recreate Harness resources"
   echo ""
   echo -e "${CYAN}5)${NC} Complete cleanup (everything including cluster)"
-  echo "   - Same as option 4, plus stops the cluster"
-  echo "   - Option to delete Colima VM for fresh start (Apple Silicon)"
+  echo -e "   ${GREEN}Removes:${NC} Harness project, Docker Hub repo, Prometheus"
+  echo -e "   ${GREEN}Stops:${NC} Kubernetes cluster (minikube/colima)"
+  echo -e "   ${BLUE}Keeps:${NC} Config files (for easier restart)"
+  echo -e "   ${YELLOW}Note:${NC} Option to delete Colima VM for fresh start (Apple Silicon)"
   echo ""
-  echo -e "${CYAN}6)${NC} Custom cleanup options"
+  echo -e "${CYAN}6)${NC} Force delete Harness project via API ${YELLOW}(bypasses Terraform state)${NC}"
+  echo "   - Use when Terraform state is corrupted or start-demo failed partway"
+  echo "   - Deletes project directly via API without checking Terraform state"
+  echo "   - Also deletes Docker Hub repository and Prometheus"
+  echo ""
+  echo -e "${CYAN}7)${NC} Custom cleanup options"
   echo "   - Choose exactly what to cleanup"
   echo ""
   echo -e "${CYAN}0)${NC} Exit without doing anything"
   echo ""
-  read -p "Enter your choice [0-6] (default: 1): " MENU_CHOICE
+  read -p "Enter your choice [0-7] (default: 1): " MENU_CHOICE
 
   # Default to option 1 if empty
   MENU_CHOICE=${MENU_CHOICE:-1}
@@ -179,6 +195,16 @@ show_cleanup_menu() {
       ;;
     6)
       echo ""
+      echo -e "${GREEN}✓${NC} Force delete via API - bypassing Terraform state"
+      DELETE_PROMETHEUS=true
+      STOP_CLUSTER=false
+      DELETE_HARNESS_PROJECT=true
+      FORCE_API_DELETE=true
+      DELETE_DOCKER_REPO=true
+      DELETE_CONFIG_FILES=false
+      ;;
+    7)
+      echo ""
       echo -e "${CYAN}Custom cleanup options:${NC}"
       echo ""
       read -p "Delete Prometheus monitoring? [y/N]: " DELETE_PROM_CHOICE
@@ -203,8 +229,14 @@ show_cleanup_menu() {
 
       read -p "Delete Harness '$PROJECT_NAME' project? [y/N]: " DELETE_HARNESS_CHOICE
       DELETE_HARNESS_PROJECT=false
+      FORCE_API_DELETE=false
       if [[ "$DELETE_HARNESS_CHOICE" =~ ^[Yy]$ ]]; then
         DELETE_HARNESS_PROJECT=true
+        # Ask if they want to force API delete (skip Terraform)
+        read -p "Force delete via API (bypass Terraform state)? [y/N]: " FORCE_API_CHOICE
+        if [[ "$FORCE_API_CHOICE" =~ ^[Yy]$ ]]; then
+          FORCE_API_DELETE=true
+        fi
       fi
 
       read -p "Delete Docker Hub repository? [y/N]: " DELETE_DOCKER_CHOICE
@@ -699,95 +731,258 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
             print_status "Found OpenTofu: $(tofu version | head -n1)"
           fi
 
-          print_section "Running $IAC_CMD Destroy"
-          print_status "Using $IAC_CMD for destroy"
-          print_info "Running $IAC_CMD destroy (this may take 2-3 minutes)..."
-
           cd kit
           TERRAFORM_SUCCESS=false
-          if $IAC_CMD destroy -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -auto-approve; then
-            print_status "Harness resources destroyed successfully via $IAC_CMD"
-            TERRAFORM_SUCCESS=true
-          else
-            print_error "$IAC_CMD destroy encountered errors"
-            print_info "Some resources may have been deleted. Check kit/terraform.tfstate"
-            print_info ""
+          SKIP_TERRAFORM=false
 
-            # Offer to delete the entire project via API as fallback
+          # Check if we should skip Terraform and go straight to API deletion
+          if [ "$FORCE_API_DELETE" = true ]; then
+            print_section "Force API Delete Mode"
+            print_info "Skipping Terraform state check, will delete project via API"
+            SKIP_TERRAFORM=true
+          elif [ ! -f "terraform.tfstate" ] && [ ! -f "terraform.tfstate.backup" ]; then
+            print_section "Terraform State Check"
+            print_error "No Terraform state files found"
             echo ""
-            echo -e "${YELLOW}$IAC_CMD couldn't delete all resources due to dependencies.${NC}"
-            echo -e "${YELLOW}Would you like to delete the entire '$PROJECT_NAME' project via Harness API?${NC}"
-            echo "This will forcefully delete the project and all its resources."
+            echo "This likely means:"
+            echo "  - start-demo.sh never ran successfully, OR"
+            echo "  - Terraform state was already cleaned up, OR"
+            echo "  - Resources were created manually"
             echo ""
-            read -p "Delete '$PROJECT_NAME' project via API? [Y/n]: " DELETE_PROJECT_API
+            echo "Options:"
+            echo "  1) Delete project via API (bypasses Terraform state)"
+            echo "  2) Skip Harness cleanup entirely"
+            echo ""
+            read -p "Enter your choice [1-2] (default: 1): " STATE_CHOICE
+            STATE_CHOICE=${STATE_CHOICE:-1}
 
-            # Default to yes if empty
-            DELETE_PROJECT_API=${DELETE_PROJECT_API:-yes}
-
-            # Accept y/Y/yes as confirmation
-            if [[ "$DELETE_PROJECT_API" =~ ^[Yy]([Ee][Ss])?$ ]]; then
-              print_section "Deleting Project via Harness API"
-
-              print_info "Account: ${HARNESS_ACCOUNT_ID}"
-              print_info "Org: default"
-              print_info "Project: $PROJECT_IDENTIFIER"
-              echo ""
-
-              print_info "Deleting '$PROJECT_NAME' project (cascade delete all resources)..."
-
-              # Delete the entire project with verbose output
-              PROJECT_DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
-                "https://app.harness.io/ng/api/projects/${PROJECT_IDENTIFIER}?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default" \
-                -H "x-api-key: ${HARNESS_PAT}" \
-                -H "Content-Type: application/json" \
-                -H "Accept: application/json" 2>&1)
-
-              PROJECT_HTTP_CODE=$(echo "$PROJECT_DELETE_RESPONSE" | tail -n 1)
-              PROJECT_RESPONSE_BODY=$(echo "$PROJECT_DELETE_RESPONSE" | head -n -1)
-
-              echo ""
-              echo "HTTP Status Code: $PROJECT_HTTP_CODE"
-
-              if [ "$PROJECT_HTTP_CODE" = "200" ] || [ "$PROJECT_HTTP_CODE" = "204" ]; then
-                print_status "$PROJECT_NAME project deleted successfully"
-                echo ""
-                echo "Project and all its resources have been deleted:"
-                echo "  - Services"
-                echo "  - Environments"
-                echo "  - Pipelines"
-                echo "  - Connectors"
-                echo "  - Monitored services"
-                echo "  - All other project resources"
-                TERRAFORM_SUCCESS=true
-              elif [ "$PROJECT_HTTP_CODE" = "404" ]; then
-                print_info "Project not found (already deleted)"
-                TERRAFORM_SUCCESS=true
-              else
-                print_error "Failed to delete project (HTTP $PROJECT_HTTP_CODE)"
-                echo ""
-                if [ -n "$PROJECT_RESPONSE_BODY" ]; then
-                  echo "API Response Body:"
-                  echo "----------------------------------------"
-                  echo "$PROJECT_RESPONSE_BODY"
-                  echo "----------------------------------------"
-                fi
-                echo ""
-                print_info "Manual deletion required via Harness UI:"
-                print_info "  1. Navigate to: Projects > $PROJECT_NAME"
-                print_info "  2. Click the three dots (⋮) menu"
-                print_info "  3. Select 'Delete Project'"
-                print_info "  4. Confirm deletion"
-              fi
+            if [ "$STATE_CHOICE" = "1" ]; then
+              print_info "Will delete project via API"
+              SKIP_TERRAFORM=true
             else
-              print_info "Skipping API deletion"
-              print_info ""
-              print_info "To retry $IAC_CMD destroy:"
-              print_info "  cd kit && $IAC_CMD destroy -var=\"pat=\$DEMO_BASE_PAT\" -var-file=\"se-parms.tfvars\""
-              print_info ""
-              print_info "Or delete manually in Harness UI:"
-              print_info "  Navigate to Projects > $PROJECT_NAME > ⋮ > Delete Project"
+              print_info "Skipping Harness cleanup"
+              cd ..
+              TERRAFORM_SUCCESS=true  # Set to true to skip error handling
+              # Jump to next section (skip terraform destroy)
+              SKIP_TERRAFORM=true
+              TERRAFORM_SUCCESS=true
             fi
           fi
+
+          if [ "$SKIP_TERRAFORM" = false ]; then
+            print_section "Running $IAC_CMD Destroy"
+            print_status "Using $IAC_CMD for destroy"
+
+            # Check if se-parms.tfvars exists
+            if [ -f "se-parms.tfvars" ]; then
+              TFVARS_ARG="-var-file=se-parms.tfvars"
+
+              # Refresh state to match reality before destroying
+              print_info "Refreshing Terraform state to match current Harness resources..."
+              # Run refresh (ignore errors as some resources may already be deleted)
+              $IAC_CMD refresh -var="pat=$HARNESS_PAT" $TFVARS_ARG > /dev/null 2>&1 || true
+            else
+              print_error "se-parms.tfvars not found"
+              echo ""
+              echo "Terraform destroy requires the tfvars file with account_id, docker_username, and DOCKER_PAT."
+              echo ""
+              echo "Options:"
+              echo "  1) Delete project via API (bypasses Terraform - RECOMMENDED)"
+              echo "  2) Cancel and manually restore se-parms.tfvars"
+              echo ""
+              read -p "Enter your choice [1-2] (default: 1): " TFVARS_CHOICE
+              TFVARS_CHOICE=${TFVARS_CHOICE:-1}
+
+              if [ "$TFVARS_CHOICE" = "1" ]; then
+                print_info "Will delete project via API instead"
+                SKIP_TERRAFORM=true
+                # Continue to API deletion section below
+              else
+                print_info "Cancelling Terraform destroy"
+                cd ..
+                exit 0
+              fi
+            fi
+
+            if [ "$SKIP_TERRAFORM" = false ]; then
+              print_info "Running $IAC_CMD destroy (this may take 2-3 minutes)..."
+
+              if $IAC_CMD destroy -var="pat=$HARNESS_PAT" $TFVARS_ARG -auto-approve; then
+                print_status "Harness resources destroyed successfully via $IAC_CMD"
+                TERRAFORM_SUCCESS=true
+              else
+                print_error "$IAC_CMD destroy encountered errors"
+                print_info "Some resources may have been deleted. Check kit/terraform.tfstate"
+                print_info ""
+
+                # Offer to delete the entire project via API as fallback
+                echo ""
+                echo -e "${YELLOW}$IAC_CMD couldn't delete all resources due to dependencies.${NC}"
+                echo -e "${YELLOW}Would you like to delete the entire '$PROJECT_NAME' project via Harness API?${NC}"
+                echo "This will forcefully delete the project and all its resources."
+                echo ""
+                read -p "Delete '$PROJECT_NAME' project via API? [Y/n]: " DELETE_PROJECT_API
+
+                # Default to yes if empty
+                DELETE_PROJECT_API=${DELETE_PROJECT_API:-yes}
+
+                # Accept y/Y/yes as confirmation
+                if [[ "$DELETE_PROJECT_API" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+                  print_section "Deleting Project via Harness API"
+
+                  # Verify we have the required credentials
+                  if [ -z "$HARNESS_ACCOUNT_ID" ] || [ -z "$HARNESS_PAT" ] || [ -z "$PROJECT_IDENTIFIER" ]; then
+                    print_error "Missing required credentials for API call"
+                    print_info "HARNESS_ACCOUNT_ID: $([ -n "$HARNESS_ACCOUNT_ID" ] && echo "set" || echo "NOT SET")"
+                    print_info "HARNESS_PAT: $([ -n "$HARNESS_PAT" ] && echo "set (${#HARNESS_PAT} chars)" || echo "NOT SET")"
+                    print_info "PROJECT_IDENTIFIER: $([ -n "$PROJECT_IDENTIFIER" ] && echo "set ($PROJECT_IDENTIFIER)" || echo "NOT SET")"
+                    echo ""
+                    print_info "Manual deletion required via Harness UI:"
+                    print_info "  1. Navigate to: Projects > $PROJECT_NAME"
+                    print_info "  2. Click the three dots (⋮) menu"
+                    print_info "  3. Select 'Delete Project'"
+                    print_info "  4. Confirm deletion"
+                    cd ..
+                    exit 1
+                  fi
+
+                  print_info "Account: ${HARNESS_ACCOUNT_ID}"
+                  print_info "Org: default"
+                  print_info "Project: $PROJECT_IDENTIFIER"
+                  echo ""
+
+                  print_info "Deleting '$PROJECT_NAME' project (cascade delete all resources)..."
+
+                  # Delete the entire project with verbose output
+                  PROJECT_DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
+                    "https://app.harness.io/ng/api/projects/${PROJECT_IDENTIFIER}?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default" \
+                    -H "x-api-key: ${HARNESS_PAT}" \
+                    -H "Content-Type: application/json" \
+                    -H "Accept: application/json" 2>&1)
+
+                  PROJECT_HTTP_CODE=$(echo "$PROJECT_DELETE_RESPONSE" | tail -n 1)
+                  # Use sed to remove last line (BSD head doesn't support -n -1)
+                  PROJECT_RESPONSE_BODY=$(echo "$PROJECT_DELETE_RESPONSE" | sed '$d')
+
+                  echo ""
+                  echo "HTTP Status Code: $PROJECT_HTTP_CODE"
+
+                  if [ "$PROJECT_HTTP_CODE" = "200" ] || [ "$PROJECT_HTTP_CODE" = "204" ]; then
+                    print_status "$PROJECT_NAME project deleted successfully"
+                    echo ""
+                    echo "Project and all its resources have been deleted:"
+                    echo "  - Services"
+                    echo "  - Environments"
+                    echo "  - Pipelines"
+                    echo "  - Connectors"
+                    echo "  - Monitored services"
+                    echo "  - All other project resources"
+                    TERRAFORM_SUCCESS=true
+                  elif [ "$PROJECT_HTTP_CODE" = "404" ]; then
+                    print_info "Project not found (already deleted)"
+                    TERRAFORM_SUCCESS=true
+                  else
+                    print_error "Failed to delete project (HTTP $PROJECT_HTTP_CODE)"
+                    echo ""
+                    if [ -n "$PROJECT_RESPONSE_BODY" ]; then
+                      echo "API Response Body:"
+                      echo "----------------------------------------"
+                      echo "$PROJECT_RESPONSE_BODY"
+                      echo "----------------------------------------"
+                    fi
+                    echo ""
+                    print_info "Manual deletion required via Harness UI:"
+                    print_info "  1. Navigate to: Projects > $PROJECT_NAME"
+                    print_info "  2. Click the three dots (⋮) menu"
+                    print_info "  3. Select 'Delete Project'"
+                    print_info "  4. Confirm deletion"
+                  fi
+                else
+                  print_info "Skipping API deletion"
+                  print_info ""
+                  print_info "To retry $IAC_CMD destroy:"
+                  print_info "  cd kit && $IAC_CMD destroy -var=\"pat=\$DEMO_BASE_PAT\" -var-file=\"se-parms.tfvars\""
+                  print_info ""
+                  print_info "Or delete manually in Harness UI:"
+                  print_info "  Navigate to Projects > $PROJECT_NAME > ⋮ > Delete Project"
+                fi
+              fi
+            fi
+          fi
+
+          # Handle force API delete or missing state scenarios
+          if [ "$SKIP_TERRAFORM" = true ] && [ "$TERRAFORM_SUCCESS" = false ]; then
+            print_section "Deleting Project via Harness API"
+
+            # Verify we have the required credentials
+            if [ -z "$HARNESS_ACCOUNT_ID" ] || [ -z "$HARNESS_PAT" ] || [ -z "$PROJECT_IDENTIFIER" ]; then
+              print_error "Missing required credentials for API call"
+              print_info "HARNESS_ACCOUNT_ID: $([ -n "$HARNESS_ACCOUNT_ID" ] && echo "set" || echo "NOT SET")"
+              print_info "HARNESS_PAT: $([ -n "$HARNESS_PAT" ] && echo "set (${#HARNESS_PAT} chars)" || echo "NOT SET")"
+              print_info "PROJECT_IDENTIFIER: $([ -n "$PROJECT_IDENTIFIER" ] && echo "set ($PROJECT_IDENTIFIER)" || echo "NOT SET")"
+              echo ""
+              print_info "Manual deletion required via Harness UI:"
+              print_info "  1. Navigate to: Projects > $PROJECT_NAME"
+              print_info "  2. Click the three dots (⋮) menu"
+              print_info "  3. Select 'Delete Project'"
+              print_info "  4. Confirm deletion"
+              cd ..
+              exit 1
+            fi
+
+            print_info "Account: ${HARNESS_ACCOUNT_ID}"
+            print_info "Org: default"
+            print_info "Project: $PROJECT_IDENTIFIER"
+            echo ""
+
+            print_info "Deleting '$PROJECT_NAME' project (cascade delete all resources)..."
+
+            # Delete the entire project with verbose output
+            PROJECT_DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
+              "https://app.harness.io/ng/api/projects/${PROJECT_IDENTIFIER}?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default" \
+              -H "x-api-key: ${HARNESS_PAT}" \
+              -H "Content-Type: application/json" \
+              -H "Accept: application/json" 2>&1)
+
+            PROJECT_HTTP_CODE=$(echo "$PROJECT_DELETE_RESPONSE" | tail -n 1)
+            # Use sed to remove last line (BSD head doesn't support -n -1)
+            PROJECT_RESPONSE_BODY=$(echo "$PROJECT_DELETE_RESPONSE" | sed '$d')
+
+            echo ""
+            echo "HTTP Status Code: $PROJECT_HTTP_CODE"
+
+            if [ "$PROJECT_HTTP_CODE" = "200" ] || [ "$PROJECT_HTTP_CODE" = "204" ]; then
+              print_status "$PROJECT_NAME project deleted successfully"
+              echo ""
+              echo "Project and all its resources have been deleted:"
+              echo "  - Services"
+              echo "  - Environments"
+              echo "  - Pipelines"
+              echo "  - Connectors"
+              echo "  - Monitored services"
+              echo "  - All other project resources"
+              TERRAFORM_SUCCESS=true
+            elif [ "$PROJECT_HTTP_CODE" = "404" ]; then
+              print_info "Project not found (already deleted)"
+              TERRAFORM_SUCCESS=true
+            else
+              print_error "Failed to delete project (HTTP $PROJECT_HTTP_CODE)"
+              echo ""
+              if [ -n "$PROJECT_RESPONSE_BODY" ]; then
+                echo "API Response Body:"
+                echo "----------------------------------------"
+                echo "$PROJECT_RESPONSE_BODY"
+                echo "----------------------------------------"
+              fi
+              echo ""
+              print_info "Manual deletion required via Harness UI:"
+              print_info "  1. Navigate to: Projects > $PROJECT_NAME"
+              print_info "  2. Click the three dots (⋮) menu"
+              print_info "  3. Select 'Delete Project'"
+              print_info "  4. Confirm deletion"
+            fi
+          fi
+
           cd ..
 
           # Clean up IaC state files if deletion was successful

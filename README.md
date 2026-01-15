@@ -49,6 +49,16 @@ This training consists of four progressive sections:
 5. **Security Testing** - Available with licensed partner organization
 6. **Policy Enforcement (OPA)** - Available with licensed partner organization
 
+## Architecture Overview
+
+![Harness Partner Demo Kit Architecture](markdown/images/kit-architecture.jpg)
+
+The demo kit consists of:
+- **Harness Manager (SaaS)** - CI/CD pipelines, connectors, and built-in features (Harness Cloud, Code Repository, Artifact Registry)
+- **Local Machine** - Kubernetes cluster (Colima/Rancher/minikube/Docker Desktop) running the delegate, lab documentation, and demo applications
+- **Docker Hub** - Container image storage with authentication via Harness Platform
+- **Local Browser** - Access documentation at localhost:30001 and the demo app at localhost:8080
+
 ## Infrastructure Requirements
 
 - **CI Builds**: Harness Cloud (requires credit card for account verification - free tier available)
@@ -87,10 +97,40 @@ This training consists of four progressive sections:
   - Generate a Personal Access Token (Settings > Security > Personal Access Tokens)
 
 ### System Requirements
-- **CPU**: 4+ cores recommended
-- **RAM**: 8GB minimum, 16GB recommended
-- **Disk**: 20GB free space
-- **OS**: macOS, Linux, or Windows (with WSL2 or Git Bash)
+
+#### Supported Operating Systems
+
+| OS | Version | Architecture | Kubernetes Option | Notes |
+|----|---------|--------------|-------------------|-------|
+| **macOS** | 12.0+ (Monterey) | Apple Silicon (M1/M2/M3/M4) | Colima (**required**) | Uses Rosetta 2 for AMD64 emulation |
+| **macOS** | 12.0+ (Monterey) | Intel | Colima, minikube, Docker Desktop, Rancher Desktop | Any K8s option works |
+| **Linux** | Ubuntu 20.04+, Debian 11+, Fedora 36+ | x86_64 | minikube, Docker Desktop, Rancher Desktop | Native AMD64, no emulation needed |
+| **Windows** | 10 (Build 19041+), 11 | x86_64 | minikube, Docker Desktop, Rancher Desktop | Requires WSL2 or Git Bash for scripts |
+
+#### Hardware Requirements
+
+| Resource | Minimum | Recommended | Notes |
+|----------|---------|-------------|-------|
+| **CPU** | 4 cores | 6+ cores | Required for Kubernetes cluster + builds |
+| **RAM** | 8 GB | 16 GB | K8s cluster needs 4-8GB allocation |
+| **Disk** | 20 GB free | 40 GB free | Docker images + K8s storage |
+
+#### Platform-Specific Notes
+
+**🍎 Apple Silicon (M1/M2/M3/M4):**
+- Colima with Rosetta 2 is **required** for AMD64 emulation (Harness Cloud builds AMD64 images)
+- Docker Desktop also works but Colima is recommended for better resource efficiency
+- First Colima startup takes 5-10 minutes to download AMD64 base images
+
+**🐧 Linux:**
+- Any modern distribution with Docker support works
+- minikube is the simplest option for most users
+- Ensure your user is in the `docker` group: `sudo usermod -aG docker $USER`
+
+**🪟 Windows:**
+- WSL2 or Git Bash required to run the setup scripts (bash)
+- Docker Desktop with WSL2 backend recommended
+- See "Windows Users - Important Setup Notes" below for detailed setup
 
 ### Windows Users - Important Setup Notes
 
