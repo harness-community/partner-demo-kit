@@ -12,7 +12,7 @@
 # - Docker image builds (backend, test, docs) with automatic architecture detection
 #   * Detects Apple Silicon (ARM64) and builds for amd64 (Harness Cloud compatibility)
 #   * Intel/AMD builds natively without platform override
-# - Harness resource provisioning via Terraform
+# - Harness resource provisioning via Terraform or OpenTofu
 #
 # Usage: ./start-demo.sh [--skip-docker-build] [--skip-terraform]
 #
@@ -69,6 +69,7 @@ SKIP_TERRAFORM=false
 CONFIG_FILE=".demo-config"
 PROJECT_NAME=""
 PROJECT_IDENTIFIER=""
+IAC_CMD=""  # Will be set to 'terraform' or 'tofu' (OpenTofu)
 
 # Load project name from config if available (for display purposes)
 if [ -f "$CONFIG_FILE" ]; then
@@ -1220,11 +1221,20 @@ if [ "$SKIP_TERRAFORM" = false ]; then
   # Configuration file
   CONFIG_FILE=".demo-config"
 
-  # Start terraform init early in background (if no state file and terraform is installed)
+  # Start terraform/tofu init early in background (if no state file and only one IaC tool is installed)
   # This runs while user enters credentials, saving time
+  # Note: If both terraform and tofu are installed, we skip early init since we need to ask user which to use
   EARLY_TF_INIT_PID=""
   if [ ! -f "kit/terraform.tfstate" ] || [ ! -s "kit/terraform.tfstate" ]; then
-    if command -v terraform &> /dev/null; then
+    # Detect IaC tools
+    HAS_TF_EARLY=false
+    HAS_TOFU_EARLY=false
+    if command -v terraform &> /dev/null; then HAS_TF_EARLY=true; fi
+    if command -v tofu &> /dev/null; then HAS_TOFU_EARLY=true; fi
+
+    # Only start early init if exactly one tool is available (not both)
+    if [ "$HAS_TF_EARLY" = true ] && [ "$HAS_TOFU_EARLY" = false ]; then
+      IAC_CMD="terraform"
       print_info "Starting terraform init in background (parallel with credential collection)..."
       (
         cd kit
@@ -1232,7 +1242,17 @@ if [ "$SKIP_TERRAFORM" = false ]; then
         echo $? > "$TEMP_DIR/terraform_init.exit"
       ) &
       EARLY_TF_INIT_PID=$!
+    elif [ "$HAS_TOFU_EARLY" = true ] && [ "$HAS_TF_EARLY" = false ]; then
+      IAC_CMD="tofu"
+      print_info "Starting tofu init in background (parallel with credential collection)..."
+      (
+        cd kit
+        tofu init > "$TEMP_DIR/terraform_init.log" 2>&1
+        echo $? > "$TEMP_DIR/terraform_init.exit"
+      ) &
+      EARLY_TF_INIT_PID=$!
     fi
+    # If both are installed, don't start early init - wait for user choice
   fi
 
   # Collect required variables (or load from cache)
@@ -1501,99 +1521,136 @@ EOF
   if [ -f "kit/terraform.tfstate" ] && [ -s "kit/terraform.tfstate" ]; then
     echo ""
     print_status "IaC state already exists - Harness resources appear to be configured"
-    print_info "To reconfigure, delete kit/terraform.tfstate or run: cd kit && terraform destroy"
+    print_info "To reconfigure, delete kit/terraform.tfstate or run: cd kit && terraform destroy (or tofu destroy)"
     echo ""
   else
 
-    # Check for Terraform
-    print_section "Checking for Terraform"
+    # Check for Terraform or OpenTofu
+    print_section "Checking for Terraform/OpenTofu"
 
-    if ! command -v terraform &> /dev/null; then
-      print_error "Terraform is not installed"
+    # Detect available IaC tools
+    HAS_TERRAFORM=false
+    HAS_TOFU=false
+
+    if command -v terraform &> /dev/null; then
+      HAS_TERRAFORM=true
+    fi
+    if command -v tofu &> /dev/null; then
+      HAS_TOFU=true
+    fi
+
+    # Handle based on what's available
+    if [ "$HAS_TERRAFORM" = true ] && [ "$HAS_TOFU" = true ]; then
+      # Both installed - ask user which to use
+      print_status "Found Terraform: $(terraform version | head -n1)"
+      print_status "Found OpenTofu: $(tofu version | head -n1)"
       echo ""
-      echo "This demo requires Terraform to provision Harness resources."
+      echo "Both Terraform and OpenTofu are installed."
+      echo ""
+      read -p "Which would you like to use? [terraform/tofu] (default: terraform): " IAC_CHOICE
+      IAC_CHOICE=${IAC_CHOICE:-terraform}
+
+      case "$IAC_CHOICE" in
+        tofu|opentofu|OpenTofu)
+          IAC_CMD="tofu"
+          print_status "Using OpenTofu"
+          ;;
+        *)
+          IAC_CMD="terraform"
+          print_status "Using Terraform"
+          ;;
+      esac
+    elif [ "$HAS_TERRAFORM" = true ]; then
+      IAC_CMD="terraform"
+      print_status "Found Terraform: $(terraform version | head -n1)"
+    elif [ "$HAS_TOFU" = true ]; then
+      IAC_CMD="tofu"
+      print_status "Found OpenTofu: $(tofu version | head -n1)"
+    else
+      print_error "Neither Terraform nor OpenTofu is installed"
+      echo ""
+      echo "This demo requires Terraform or OpenTofu to provision Harness resources."
       echo ""
       echo "Installation options:"
       echo ""
-      echo "Visit: https://www.terraform.io/downloads"
+      echo "Terraform: https://www.terraform.io/downloads"
+      echo "OpenTofu:  https://opentofu.org/docs/intro/install/"
       echo ""
       cd ..
       exit 1
     fi
 
-    print_status "Found Terraform: $(terraform version | head -n1)"
-
-    # Run Terraform
-    print_section "Running Terraform"
+    # Run Terraform/OpenTofu
+    print_section "Running $IAC_CMD"
 
     cd kit
 
     # Check if early init was started, otherwise start it now
     if [ -n "$EARLY_TF_INIT_PID" ]; then
       TERRAFORM_INIT_PID=$EARLY_TF_INIT_PID
-      print_info "Terraform init was started earlier (parallel with credential collection)"
+      print_info "$IAC_CMD init was started earlier (parallel with credential collection)"
     else
-      # Start terraform init now
-      print_info "Starting terraform init..."
+      # Start init now
+      print_info "Starting $IAC_CMD init..."
       (
-        terraform init > "$TEMP_DIR/terraform_init.log" 2>&1
+        $IAC_CMD init > "$TEMP_DIR/terraform_init.log" 2>&1
         echo $? > "$TEMP_DIR/terraform_init.exit"
       ) &
       TERRAFORM_INIT_PID=$!
     fi
 
     # Wait for init to complete (should already be done or nearly done)
-    print_info "Waiting for terraform init to complete..."
-    if wait_with_spinner $TERRAFORM_INIT_PID "Initializing Terraform providers..."; then
+    print_info "Waiting for $IAC_CMD init to complete..."
+    if wait_with_spinner $TERRAFORM_INIT_PID "Initializing $IAC_CMD providers..."; then
       INIT_EXIT=$(cat "$TEMP_DIR/terraform_init.exit" 2>/dev/null || echo "1")
       if [ "$INIT_EXIT" = "0" ]; then
-        print_status "Terraform initialized"
+        print_status "$IAC_CMD initialized"
       else
-        print_error "Terraform init failed"
+        print_error "$IAC_CMD init failed"
         cat "$TEMP_DIR/terraform_init.log" 2>/dev/null | tail -10
         cd ..
         exit 1
       fi
     else
-      print_error "Terraform init failed"
+      print_error "$IAC_CMD init failed"
       cat "$TEMP_DIR/terraform_init.log" 2>/dev/null | tail -10
       cd ..
       exit 1
     fi
 
     # Plan
-    print_info "Running terraform plan..."
+    print_info "Running $IAC_CMD plan..."
     (
-      terraform plan -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan > "$TEMP_DIR/terraform_plan.log" 2>&1
+      $IAC_CMD plan -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan > "$TEMP_DIR/terraform_plan.log" 2>&1
       echo $? > "$TEMP_DIR/terraform_plan.exit"
     ) &
     PLAN_PID=$!
 
-    if wait_with_spinner $PLAN_PID "Creating Terraform plan (1-2 minutes)..."; then
+    if wait_with_spinner $PLAN_PID "Creating $IAC_CMD plan (1-2 minutes)..."; then
       PLAN_EXIT=$(cat "$TEMP_DIR/terraform_plan.exit" 2>/dev/null || echo "1")
       if [ "$PLAN_EXIT" = "0" ]; then
-        print_status "Terraform plan created"
+        print_status "$IAC_CMD plan created"
       else
-        print_error "Terraform plan failed"
+        print_error "$IAC_CMD plan failed"
         echo ""
         cat "$TEMP_DIR/terraform_plan.log" 2>/dev/null | tail -20
         echo ""
-        print_info "Run manually to see full errors: cd kit && terraform plan -var=\"pat=\$HARNESS_PAT\" -var-file=\"se-parms.tfvars\""
+        print_info "Run manually to see full errors: cd kit && $IAC_CMD plan -var=\"pat=\$HARNESS_PAT\" -var-file=\"se-parms.tfvars\""
         cd ..
         exit 1
       fi
     else
-      print_error "Terraform plan failed"
+      print_error "$IAC_CMD plan failed"
       cd ..
       exit 1
     fi
 
     # Apply (show output for visibility)
-    print_info "Running terraform apply (this may take 3-5 minutes)..."
-    if terraform apply -auto-approve plan.tfplan; then
-      print_status "Terraform apply completed - Harness resources created!"
+    print_info "Running $IAC_CMD apply (this may take 3-5 minutes)..."
+    if $IAC_CMD apply -auto-approve plan.tfplan; then
+      print_status "$IAC_CMD apply completed - Harness resources created!"
     else
-      print_error "Terraform apply failed"
+      print_error "$IAC_CMD apply failed"
       cd ..
       exit 1
     fi

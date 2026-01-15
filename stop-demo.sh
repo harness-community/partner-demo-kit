@@ -34,6 +34,7 @@ DELETE_HARNESS_PROJECT=false
 DELETE_DOCKER_REPO=false
 DELETE_CONFIG_FILES=false
 NO_INTERACTIVE=false
+IAC_CMD=""  # Will be set to 'terraform' or 'tofu' (OpenTofu)
 
 # Save original argument count
 ORIGINAL_ARG_COUNT=$#
@@ -663,29 +664,58 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
           sleep 2
         fi
 
-        # Check for Terraform
-        if ! command -v terraform &> /dev/null; then
-          print_error "Terraform not found"
-          print_info "Cannot destroy Harness resources without Terraform"
-          print_info "Please install Terraform, or delete resources manually through Harness UI"
+        # Check for Terraform or OpenTofu
+        HAS_TERRAFORM=false
+        HAS_TOFU=false
+        if command -v terraform &> /dev/null; then HAS_TERRAFORM=true; fi
+        if command -v tofu &> /dev/null; then HAS_TOFU=true; fi
+
+        if [ "$HAS_TERRAFORM" = false ] && [ "$HAS_TOFU" = false ]; then
+          print_error "Neither Terraform nor OpenTofu found"
+          print_info "Cannot destroy Harness resources without Terraform or OpenTofu"
+          print_info "Please install one of them, or delete resources manually through Harness UI"
         else
-          print_section "Running Terraform Destroy"
-          print_status "Using Terraform for destroy"
-          print_info "Running terraform destroy (this may take 2-3 minutes)..."
+          # Determine which IaC tool to use
+          if [ "$HAS_TERRAFORM" = true ] && [ "$HAS_TOFU" = true ]; then
+            # Both installed - ask user
+            print_status "Found Terraform: $(terraform version | head -n1)"
+            print_status "Found OpenTofu: $(tofu version | head -n1)"
+            echo ""
+            read -p "Which would you like to use? [terraform/tofu] (default: terraform): " IAC_CHOICE
+            IAC_CHOICE=${IAC_CHOICE:-terraform}
+            case "$IAC_CHOICE" in
+              tofu|opentofu|OpenTofu)
+                IAC_CMD="tofu"
+                ;;
+              *)
+                IAC_CMD="terraform"
+                ;;
+            esac
+          elif [ "$HAS_TERRAFORM" = true ]; then
+            IAC_CMD="terraform"
+            print_status "Found Terraform: $(terraform version | head -n1)"
+          else
+            IAC_CMD="tofu"
+            print_status "Found OpenTofu: $(tofu version | head -n1)"
+          fi
+
+          print_section "Running $IAC_CMD Destroy"
+          print_status "Using $IAC_CMD for destroy"
+          print_info "Running $IAC_CMD destroy (this may take 2-3 minutes)..."
 
           cd kit
           TERRAFORM_SUCCESS=false
-          if terraform destroy -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -auto-approve; then
-            print_status "Harness resources destroyed successfully via Terraform"
+          if $IAC_CMD destroy -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -auto-approve; then
+            print_status "Harness resources destroyed successfully via $IAC_CMD"
             TERRAFORM_SUCCESS=true
           else
-            print_error "Terraform destroy encountered errors"
+            print_error "$IAC_CMD destroy encountered errors"
             print_info "Some resources may have been deleted. Check kit/terraform.tfstate"
             print_info ""
 
             # Offer to delete the entire project via API as fallback
             echo ""
-            echo -e "${YELLOW}Terraform couldn't delete all resources due to dependencies.${NC}"
+            echo -e "${YELLOW}$IAC_CMD couldn't delete all resources due to dependencies.${NC}"
             echo -e "${YELLOW}Would you like to delete the entire '$PROJECT_NAME' project via Harness API?${NC}"
             echo "This will forcefully delete the project and all its resources."
             echo ""
@@ -751,8 +781,8 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
             else
               print_info "Skipping API deletion"
               print_info ""
-              print_info "To retry terraform destroy:"
-              print_info "  cd kit && terraform destroy -var=\"pat=\$DEMO_BASE_PAT\" -var-file=\"se-parms.tfvars\""
+              print_info "To retry $IAC_CMD destroy:"
+              print_info "  cd kit && $IAC_CMD destroy -var=\"pat=\$DEMO_BASE_PAT\" -var-file=\"se-parms.tfvars\""
               print_info ""
               print_info "Or delete manually in Harness UI:"
               print_info "  Navigate to Projects > $PROJECT_NAME > ⋮ > Delete Project"
@@ -760,13 +790,13 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
           fi
           cd ..
 
-          # Clean up terraform state files if deletion was successful
+          # Clean up IaC state files if deletion was successful
           if [ "$TERRAFORM_SUCCESS" = true ]; then
-            print_info "Cleaning up Terraform state files..."
+            print_info "Cleaning up IaC state files..."
             if [ -f "kit/terraform.tfstate" ]; then
               rm -f kit/terraform.tfstate
               rm -f kit/terraform.tfstate.backup
-              print_status "Terraform state files removed"
+              print_status "State files removed"
             fi
           fi
         fi
