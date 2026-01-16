@@ -12,7 +12,7 @@
 # - Docker image builds (backend, test, docs) with automatic architecture detection
 #   * Detects Apple Silicon (ARM64) and builds for amd64 (Harness Cloud compatibility)
 #   * Intel/AMD builds natively without platform override
-# - Harness resource provisioning via Terraform
+# - Harness resource provisioning via Terraform or OpenTofu
 #
 # Usage: ./start-demo.sh [--skip-docker-build] [--skip-terraform]
 #
@@ -24,11 +24,61 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+
+# Minimum resource requirements for the demo
+MIN_CPU_CORES=4
+MIN_MEMORY_GB=8
+
+# Temporary directory for background process logs
+TEMP_DIR=$(mktemp -d)
+trap "rm -rf $TEMP_DIR" EXIT
+
+# Progress spinner function
+spinner() {
+  local pid=$1
+  local message=$2
+  local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+  local i=0
+
+  while kill -0 $pid 2>/dev/null; do
+    i=$(( (i + 1) % ${#spin} ))
+    printf "\r${CYAN}${spin:$i:1}${NC} $message"
+    sleep 0.1
+  done
+  printf "\r"
+}
+
+# Wait for background process with spinner
+wait_with_spinner() {
+  local pid=$1
+  local message=$2
+  spinner $pid "$message" &
+  local spinner_pid=$!
+  wait $pid
+  local exit_code=$?
+  kill $spinner_pid 2>/dev/null || true
+  wait $spinner_pid 2>/dev/null || true
+  return $exit_code
+}
 
 # Configuration
 SKIP_DOCKER_BUILD=false
 SKIP_TERRAFORM=false
+CONFIG_FILE=".demo-config"
+PROJECT_NAME=""
+PROJECT_IDENTIFIER=""
+IAC_CMD=""  # Will be set to 'terraform' or 'tofu' (OpenTofu)
+
+# Load project name from config if available (for display purposes)
+if [ -f "$CONFIG_FILE" ]; then
+  PROJECT_NAME=$(grep "PROJECT_NAME=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2-)
+  PROJECT_IDENTIFIER=$(grep "PROJECT_IDENTIFIER=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+fi
+# Default to "Base Demo" if not set
+PROJECT_NAME=${PROJECT_NAME:-Base Demo}
+PROJECT_IDENTIFIER=${PROJECT_IDENTIFIER:-Base_Demo}
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -71,6 +121,203 @@ print_section() {
   echo ""
   echo -e "${BLUE}▶ $1${NC}"
   echo "----------------------------------------"
+}
+
+# Check Kubernetes cluster resources (CPU and memory)
+check_cluster_resources() {
+  print_section "Checking Cluster Resources"
+
+  # Wait for cluster to be ready (API server may need a moment after fresh start)
+  print_info "Waiting for cluster API to be ready..."
+  local retries=0
+  local max_retries=30
+  while [ $retries -lt $max_retries ]; do
+    if kubectl get nodes &> /dev/null; then
+      print_status "Cluster API is ready"
+      break
+    fi
+    retries=$((retries + 1))
+    sleep 2
+  done
+
+  if [ $retries -eq $max_retries ]; then
+    print_error "Cluster API did not become ready in time"
+    return 1
+  fi
+
+  # Get node resources using kubectl with jsonpath for more reliable parsing
+  local cpu_raw memory_raw
+  cpu_raw=$(kubectl get nodes -o jsonpath='{.items[0].status.allocatable.cpu}' 2>/dev/null || true)
+  memory_raw=$(kubectl get nodes -o jsonpath='{.items[0].status.allocatable.memory}' 2>/dev/null || true)
+
+  if [ -z "$cpu_raw" ] || [ -z "$memory_raw" ]; then
+    print_error "Cannot retrieve cluster node information"
+    return 1
+  fi
+
+  # Parse CPU (convert millicores to cores if needed)
+  local cpu_cores
+  if [[ "$cpu_raw" == *m ]]; then
+    cpu_cores=$(( ${cpu_raw%m} / 1000 ))
+  else
+    cpu_cores=$cpu_raw
+  fi
+
+  # Parse memory (convert to GB) - handle Ki suffix properly
+  local memory_gb
+  local memory_num
+  case "$memory_raw" in
+    *Gi)
+      memory_gb=${memory_raw%Gi}
+      ;;
+    *G)
+      memory_gb=${memory_raw%G}
+      ;;
+    *Mi)
+      memory_num=${memory_raw%Mi}
+      memory_gb=$(( memory_num / 1024 ))
+      ;;
+    *Ki)
+      memory_num=${memory_raw%Ki}
+      # Use awk for larger numbers to avoid bash integer overflow
+      memory_gb=$(echo "$memory_num" | awk '{printf "%.0f", $1 / 1024 / 1024}')
+      ;;
+    *)
+      # Raw bytes - use awk for large numbers
+      memory_gb=$(echo "$memory_raw" | awk '{printf "%.0f", $1 / 1024 / 1024 / 1024}')
+      ;;
+  esac
+
+  # Ensure memory_gb is a valid number (default to 0 if parsing failed)
+  if ! [[ "$memory_gb" =~ ^[0-9]+$ ]]; then
+    memory_gb=0
+  fi
+
+  print_info "Cluster resources: ${cpu_cores} CPU cores, ${memory_gb}GB memory"
+
+  local resources_ok=true
+
+  # Check CPU
+  if [ "$cpu_cores" -lt "$MIN_CPU_CORES" ]; then
+    print_error "Insufficient CPU: ${cpu_cores} cores (minimum: ${MIN_CPU_CORES} cores)"
+    resources_ok=false
+  else
+    print_status "CPU: ${cpu_cores} cores (minimum: ${MIN_CPU_CORES})"
+  fi
+
+  # Check memory
+  if [ "$memory_gb" -lt "$MIN_MEMORY_GB" ]; then
+    print_error "Insufficient memory: ${memory_gb}GB (minimum: ${MIN_MEMORY_GB}GB)"
+    resources_ok=false
+  else
+    print_status "Memory: ${memory_gb}GB (minimum: ${MIN_MEMORY_GB}GB)"
+  fi
+
+  if [ "$resources_ok" = false ]; then
+    echo ""
+    print_error "Cluster does not meet minimum resource requirements"
+    echo ""
+    echo "The demo requires at least ${MIN_CPU_CORES} CPU cores and ${MIN_MEMORY_GB}GB memory."
+    echo ""
+
+    # Offer automatic remediation for Colima and minikube
+    if [ "$K8S_TYPE" = "colima" ]; then
+      echo "Would you like to automatically restart Colima with the correct resources?"
+      echo "This will stop and delete the current Colima VM, then create a new one."
+      echo ""
+      read -p "Restart Colima with ${MIN_CPU_CORES} CPUs and ${MIN_MEMORY_GB}GB memory? [Y/n]: " RESTART_COLIMA
+      RESTART_COLIMA=${RESTART_COLIMA:-yes}
+
+      if [[ "$RESTART_COLIMA" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+        print_info "Stopping Colima..."
+        colima stop 2>/dev/null || true
+        print_info "Deleting Colima VM and runtime data..."
+        colima delete -f --data 2>/dev/null || true
+        print_info "Starting Colima with correct resources (this may take 5-10 minutes)..."
+        if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
+          if colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu ${MIN_CPU_CORES} --memory ${MIN_MEMORY_GB} --kubernetes --runtime docker; then
+            print_status "Colima restarted successfully with ${MIN_CPU_CORES} CPUs and ${MIN_MEMORY_GB}GB memory"
+            return 0  # Resources are now OK
+          else
+            print_error "Failed to restart Colima"
+            exit 1
+          fi
+        else
+          if colima start --cpu ${MIN_CPU_CORES} --memory ${MIN_MEMORY_GB} --kubernetes; then
+            print_status "Colima restarted successfully with ${MIN_CPU_CORES} CPUs and ${MIN_MEMORY_GB}GB memory"
+            return 0  # Resources are now OK
+          else
+            print_error "Failed to restart Colima"
+            exit 1
+          fi
+        fi
+      else
+        echo ""
+        echo "To manually increase Colima resources:"
+        echo "  colima stop"
+        echo "  colima delete --data"
+        if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
+          echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu ${MIN_CPU_CORES} --memory ${MIN_MEMORY_GB} --kubernetes --runtime docker"
+        else
+          echo "  colima start --cpu ${MIN_CPU_CORES} --memory ${MIN_MEMORY_GB} --kubernetes"
+        fi
+      fi
+    elif [ "$K8S_TYPE" = "minikube" ]; then
+      echo "Would you like to automatically restart minikube with the correct resources?"
+      echo "This will stop and delete the current minikube cluster, then create a new one."
+      echo ""
+      read -p "Restart minikube with ${MIN_CPU_CORES} CPUs and ${MIN_MEMORY_GB}GB memory? [Y/n]: " RESTART_MINIKUBE
+      RESTART_MINIKUBE=${RESTART_MINIKUBE:-yes}
+
+      if [[ "$RESTART_MINIKUBE" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+        print_info "Stopping minikube..."
+        minikube stop 2>/dev/null || true
+        print_info "Deleting minikube cluster..."
+        minikube delete 2>/dev/null || true
+        print_info "Starting minikube with correct resources..."
+        if minikube start --cpus=${MIN_CPU_CORES} --memory=${MIN_MEMORY_GB}g; then
+          print_status "minikube restarted successfully with ${MIN_CPU_CORES} CPUs and ${MIN_MEMORY_GB}GB memory"
+          minikube addons enable metrics-server &> /dev/null || true
+          return 0  # Resources are now OK
+        else
+          print_error "Failed to restart minikube"
+          exit 1
+        fi
+      else
+        echo ""
+        echo "To manually increase minikube resources:"
+        echo "  minikube stop"
+        echo "  minikube delete"
+        echo "  minikube start --cpus=${MIN_CPU_CORES} --memory=${MIN_MEMORY_GB}g"
+      fi
+    elif [ "$K8S_TYPE" = "docker-desktop" ]; then
+      echo "To increase Docker Desktop resources:"
+      echo "  1. Open Docker Desktop > Settings > Resources"
+      echo "  2. Set CPUs to at least ${MIN_CPU_CORES}"
+      echo "  3. Set Memory to at least ${MIN_MEMORY_GB}GB"
+      echo "  4. Click 'Apply & Restart'"
+    elif [ "$K8S_TYPE" = "rancher-desktop" ]; then
+      echo "To increase Rancher Desktop resources:"
+      echo "  1. Open Rancher Desktop > Preferences > Virtual Machine"
+      echo "  2. Set CPUs to at least ${MIN_CPU_CORES}"
+      echo "  3. Set Memory to at least ${MIN_MEMORY_GB}GB"
+      echo "  4. Click 'Apply'"
+    else
+      echo "Please increase your Kubernetes cluster resources to at least:"
+      echo "  - CPU: ${MIN_CPU_CORES} cores"
+      echo "  - Memory: ${MIN_MEMORY_GB}GB"
+    fi
+    echo ""
+
+    read -p "Continue anyway? (not recommended) [y/N]: " CONTINUE_ANYWAY
+    if [[ ! "$CONTINUE_ANYWAY" =~ ^[Yy]$ ]]; then
+      print_error "Exiting. Please increase cluster resources and try again."
+      exit 1
+    fi
+    print_info "Continuing with insufficient resources (may experience issues)..."
+  else
+    print_status "Cluster resources are sufficient for the demo"
+  fi
 }
 
 # Detect Operating System and Architecture
@@ -161,7 +408,7 @@ if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]
     else
       echo ""
       echo "To start Colima with AMD64 emulation after installing dependencies:"
-      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker"
       echo ""
       echo "Note: First startup may take 5-10 minutes while downloading images."
       echo ""
@@ -190,17 +437,17 @@ if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]
         if [[ "$RESTART_COLIMA" =~ ^[Yy]([Ee][Ss])?$ ]]; then
           print_info "Stopping Colima..."
           colima stop
-          print_info "Deleting Colima VM..."
-          colima delete
-          print_info "Starting Colima with AMD64 emulation (this may take 5-10 minutes)..."
-          colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes
+          print_info "Deleting Colima VM and runtime data..."
+          colima delete --data -f
+          print_info "Starting Colima with AMD64 emulation and docker runtime (this may take 5-10 minutes)..."
+          colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker
           print_status "Colima started successfully with AMD64 emulation"
         else
           print_error "Cannot proceed without AMD64 architecture"
           echo ""
           echo "To restart manually:"
-          echo "  colima stop && colima delete"
-          echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+          echo "  colima stop && colima delete --data"
+          echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker"
           echo ""
           K8S_TOOL_MISSING=true
         fi
@@ -208,14 +455,21 @@ if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]
     else
       print_info "Colima is not running - starting it now..."
       echo ""
-      print_info "Starting Colima with AMD64 emulation (this may take 5-10 minutes on first run)..."
-      if colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes; then
-        print_status "Colima started successfully"
+
+      # Always clean up old runtime data before starting
+      # This ensures a clean start
+      print_info "Cleaning up any existing Colima data (required for docker runtime)..."
+      colima delete --data -f 2>/dev/null || true
+
+      print_info "Starting Colima with AMD64 emulation and docker runtime (this may take 5-10 minutes on first run)..."
+      if colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker; then
+        print_status "Colima started successfully with docker runtime"
       else
         print_error "Failed to start Colima"
         echo ""
         echo "Please try starting manually:"
-        echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+        echo "  colima delete --data"
+        echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker"
         echo ""
         K8S_TOOL_MISSING=true
       fi
@@ -306,12 +560,16 @@ if ! command -v kubectl &> /dev/null; then
 fi
 print_status "kubectl found: $(kubectl version --client --short 2>/dev/null || kubectl version --client 2>&1 | head -n1)"
 
-# Check if Docker is running
-if ! docker info &> /dev/null; then
-  print_error "Docker is not running. Please start Docker Desktop."
+# Verify Docker daemon is ready
+print_info "Checking container runtime availability..."
+if docker info &> /dev/null; then
+  print_status "Docker daemon is running"
+else
+  print_error "Docker daemon is not running"
+  echo ""
+  echo "Please start Docker Desktop or your container runtime platform."
   exit 1
 fi
-print_status "Docker daemon is running"
 
 # Detect Kubernetes environment
 print_section "Detecting Kubernetes Environment"
@@ -322,15 +580,33 @@ if kubectl config current-context 2>/dev/null | grep -q "colima"; then
   print_status "Detected Colima"
   # Verify architecture for Colima on Apple Silicon
   if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
-    CLUSTER_ARCH=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.architecture}' 2>/dev/null)
+    # Wait for cluster to be ready before checking architecture
+    print_info "Checking cluster architecture (waiting for API to be ready)..."
+    CLUSTER_ARCH=""
+    ARCH_RETRIES=0
+    ARCH_MAX_RETRIES=30
+    while [ $ARCH_RETRIES -lt $ARCH_MAX_RETRIES ]; do
+      CLUSTER_ARCH=$(kubectl get nodes -o jsonpath='{.items[0].status.nodeInfo.architecture}' 2>/dev/null || true)
+      if [ -n "$CLUSTER_ARCH" ]; then
+        break
+      fi
+      ARCH_RETRIES=$((ARCH_RETRIES + 1))
+      sleep 2
+    done
+
+    if [ -z "$CLUSTER_ARCH" ]; then
+      print_error "Could not determine cluster architecture (API not ready after 60 seconds)"
+      exit 1
+    fi
+
     if [ "$CLUSTER_ARCH" = "amd64" ]; then
       print_status "Cluster is running AMD64 (correct for Harness Cloud compatibility)"
     else
       print_error "Cluster is running $CLUSTER_ARCH architecture (expected amd64)"
       echo ""
       echo "Please restart Colima with AMD64 emulation:"
-      echo "  colima stop && colima delete"
-      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+      echo "  colima stop && colima delete --data"
+      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker"
       exit 1
     fi
   fi
@@ -353,7 +629,7 @@ else
     echo ""
     if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
       echo "For Apple Silicon Macs, start Colima:"
-      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes"
+      echo "  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker"
     else
       echo "Please ensure one of the following is running:"
       echo "  - minikube (run 'minikube start')"
@@ -371,7 +647,7 @@ if [ "$K8S_TYPE" = "colima" ]; then
   if ! colima status &> /dev/null; then
     print_info "Starting Colima (this may take 5-10 minutes on first run)..."
     if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
-      colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes
+      colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker
     else
       colima start --cpu 4 --memory 8 --kubernetes
     fi
@@ -399,12 +675,50 @@ fi
 
 # Verify cluster connectivity
 print_section "Verifying Cluster Connectivity"
-if kubectl cluster-info &> /dev/null; then
-  print_status "Successfully connected to Kubernetes cluster"
-  print_info "Cluster: $(kubectl config current-context)"
-else
-  print_error "Cannot connect to Kubernetes cluster"
+
+# Wait for cluster API to be ready (may need a moment after fresh start)
+print_info "Waiting for cluster API to be ready..."
+RETRIES=0
+MAX_RETRIES=30
+while [ $RETRIES -lt $MAX_RETRIES ]; do
+  if kubectl cluster-info &> /dev/null; then
+    print_status "Successfully connected to Kubernetes cluster"
+    print_info "Cluster: $(kubectl config current-context)"
+    break
+  fi
+  RETRIES=$((RETRIES + 1))
+  sleep 2
+done
+
+if [ $RETRIES -eq $MAX_RETRIES ]; then
+  print_error "Cannot connect to Kubernetes cluster after waiting 60 seconds"
+  echo ""
+  echo "Troubleshooting tips:"
+  if [ "$K8S_TYPE" = "colima" ]; then
+    echo "  1. Check Colima status: colima status"
+    if [ "$OS_TYPE" = "macos" ] && ([ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]); then
+      echo "  2. Try restarting Colima: colima stop && colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker"
+    else
+      echo "  2. Try restarting Colima: colima stop && colima start --cpu 4 --memory 8 --kubernetes"
+    fi
+  elif [ "$K8S_TYPE" = "minikube" ]; then
+    echo "  1. Check minikube status: minikube status"
+    echo "  2. Try restarting minikube: minikube stop && minikube start"
+  fi
+  echo "  3. Check kubectl config: kubectl config current-context"
   exit 1
+fi
+
+# Check cluster resources (CPU and memory)
+check_cluster_resources
+
+# Ensure harness-delegate-ng namespace exists (for delegate installation later)
+print_info "Ensuring harness-delegate-ng namespace exists..."
+if ! kubectl get namespace harness-delegate-ng &> /dev/null; then
+  kubectl create namespace harness-delegate-ng &> /dev/null
+  print_status "Created harness-delegate-ng namespace"
+else
+  print_status "harness-delegate-ng namespace already exists"
 fi
 
 # Create Docker Hub secret for pulling images
@@ -443,31 +757,27 @@ if [ -n "$DOCKER_USERNAME" ] && [ -n "$DOCKER_PAT" ] && [ "$DOCKER_PAT" != "logg
     print_error "Failed to create Docker Hub secret in default namespace"
   fi
 
-  # Create secret in harness-delegate-ng namespace (if it exists)
-  if kubectl get namespace harness-delegate-ng &> /dev/null; then
-    if kubectl get secret dockerhub-pull -n harness-delegate-ng &> /dev/null; then
-      print_info "Updating existing Docker Hub secret in harness-delegate-ng namespace..."
-      kubectl delete secret dockerhub-pull -n harness-delegate-ng &> /dev/null
-    fi
+  # Create secret in harness-delegate-ng namespace
+  if kubectl get secret dockerhub-pull -n harness-delegate-ng &> /dev/null; then
+    print_info "Updating existing Docker Hub secret in harness-delegate-ng namespace..."
+    kubectl delete secret dockerhub-pull -n harness-delegate-ng &> /dev/null
+  fi
 
-    kubectl create secret docker-registry dockerhub-pull \
-      --docker-server=https://index.docker.io/v1/ \
-      --docker-username="$DOCKER_USERNAME" \
-      --docker-password="$DOCKER_PAT" \
-      --docker-email="${DOCKER_USERNAME}@example.com" \
-      -n harness-delegate-ng &> /dev/null
+  kubectl create secret docker-registry dockerhub-pull \
+    --docker-server=https://index.docker.io/v1/ \
+    --docker-username="$DOCKER_USERNAME" \
+    --docker-password="$DOCKER_PAT" \
+    --docker-email="${DOCKER_USERNAME}@example.com" \
+    -n harness-delegate-ng &> /dev/null
 
-    if [ $? -eq 0 ]; then
-      print_status "Docker Hub secret created in harness-delegate-ng namespace"
+  if [ $? -eq 0 ]; then
+    print_status "Docker Hub secret created in harness-delegate-ng namespace"
 
-      # Attach secret to default service account
-      kubectl patch serviceaccount default -n harness-delegate-ng -p '{"imagePullSecrets": [{"name": "dockerhub-pull"}]}' &> /dev/null
-      print_status "Attached secret to default service account in harness-delegate-ng"
-    else
-      print_error "Failed to create Docker Hub secret in harness-delegate-ng namespace"
-    fi
+    # Attach secret to default service account
+    kubectl patch serviceaccount default -n harness-delegate-ng -p '{"imagePullSecrets": [{"name": "dockerhub-pull"}]}' &> /dev/null
+    print_status "Attached secret to default service account in harness-delegate-ng"
   else
-    print_info "harness-delegate-ng namespace not found, skipping secret creation there"
+    print_error "Failed to create Docker Hub secret in harness-delegate-ng namespace"
   fi
 
   # Attach secret to default service account in default namespace
@@ -478,53 +788,104 @@ else
   print_info "The secret will be created after Docker authentication"
 fi
 
-# Deploy Prometheus
-print_section "Deploying Prometheus"
+# Deploy Prometheus (non-blocking - runs in background)
+print_section "Deploying Prometheus (Background)"
 
-# Check if monitoring namespace exists
-if kubectl get namespace monitoring &> /dev/null; then
-  print_info "Monitoring namespace already exists"
-else
-  print_info "Creating monitoring namespace..."
-  kubectl create namespace monitoring
-  print_status "Monitoring namespace created"
-fi
+# Function to deploy Prometheus in background
+deploy_prometheus_background() {
+  {
+    # Check if monitoring namespace exists
+    if ! kubectl get namespace monitoring &> /dev/null; then
+      kubectl create namespace monitoring 2>/dev/null
+    fi
 
-# Check if Prometheus is already deployed and running
-PROMETHEUS_ALREADY_RUNNING=false
+    # Check if Prometheus is already deployed and running
+    if kubectl get pods -n monitoring -l app=prometheus 2>/dev/null | grep -q "Running"; then
+      echo "ALREADY_RUNNING" > "$TEMP_DIR/prometheus_status"
+    elif kubectl get deployment -n monitoring prometheus-deployment &> /dev/null; then
+      kubectl -n monitoring delete -f kit/prometheus.yml --ignore-not-found=true &> /dev/null
+      sleep 3
+      kubectl -n monitoring apply -f kit/prometheus.yml &> /dev/null
+      kubectl wait --for=condition=ready pod -l app=prometheus -n monitoring --timeout=120s &> /dev/null
+      echo "REDEPLOYED" > "$TEMP_DIR/prometheus_status"
+    else
+      kubectl -n monitoring apply -f kit/prometheus.yml &> /dev/null
+      kubectl wait --for=condition=ready pod -l app=prometheus -n monitoring --timeout=120s &> /dev/null
+      echo "DEPLOYED" > "$TEMP_DIR/prometheus_status"
+    fi
+  } &> "$TEMP_DIR/prometheus.log"
+  echo $? > "$TEMP_DIR/prometheus_exit_code"
+}
+
+# Check if already running before starting background deployment
 if kubectl get pods -n monitoring -l app=prometheus 2>/dev/null | grep -q "Running"; then
   print_status "Prometheus is already running"
-  PROMETHEUS_ALREADY_RUNNING=true
-elif kubectl get deployment -n monitoring prometheus-deployment &> /dev/null; then
-  print_info "Prometheus deployment exists but not running, redeploying..."
-  kubectl -n monitoring delete -f kit/prometheus.yml --ignore-not-found=true &> /dev/null
-  sleep 5
-  kubectl -n monitoring apply -f kit/prometheus.yml &> /dev/null
-  print_status "Prometheus redeployed"
+  PROMETHEUS_PID=""
 else
-  print_info "Deploying Prometheus..."
-  kubectl -n monitoring apply -f kit/prometheus.yml &> /dev/null
-  print_status "Prometheus deployed"
-fi
-
-# Wait for Prometheus to be ready (only if we just deployed or redeployed it)
-if [ "$PROMETHEUS_ALREADY_RUNNING" = false ]; then
-  print_info "Waiting for Prometheus to be ready..."
-  if kubectl wait --for=condition=ready pod -l app=prometheus -n monitoring --timeout=120s &> /dev/null; then
-    print_status "Prometheus is ready"
-  else
-    # Double-check if it's actually running despite wait timeout
-    if kubectl get pods -n monitoring -l app=prometheus 2>/dev/null | grep -q "Running"; then
-      print_status "Prometheus is running"
-    else
-      print_error "Prometheus failed to start. Check with: kubectl get pods -n monitoring"
-    fi
-  fi
+  print_info "Prometheus deployment started in background..."
+  deploy_prometheus_background &
+  PROMETHEUS_PID=$!
 fi
 
 # Build and push Docker images (optional)
 if [ "$SKIP_DOCKER_BUILD" = false ]; then
   print_section "Building Backend Docker Image"
+
+  # Prompt for project name early (needed for documentation personalization)
+  # Full validation with existence check happens in the Terraform section
+  if [ "$PROJECT_NAME" = "Base Demo" ]; then
+    echo ""
+    echo "Choose a name for your Harness project"
+    echo "This will be displayed in the Harness UI (e.g., 'Partner Workshop', 'ACME Demo')"
+    echo ""
+    echo "Note: Cannot use reserved words like: project, org, account, pipeline, service, etc."
+    echo ""
+    read -p "Enter your Harness Project name [Base Demo]: " USER_PROJECT_NAME
+
+    # Default to "Base Demo" if empty
+    USER_PROJECT_NAME=${USER_PROJECT_NAME:-Base Demo}
+
+    # Reserved words that cannot be used as project names
+    RESERVED_WORDS="project org account pipeline service environment connector secret template infrastructure delegate trigger artifact manifest variable input output stage step group"
+
+    # Function to check if a word is reserved (local to this block)
+    check_reserved() {
+      local word=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+      for reserved in $RESERVED_WORDS; do
+        if [ "$word" = "$reserved" ]; then
+          return 0
+        fi
+      done
+      return 1
+    }
+
+    # Validate project name - reserved words check only
+    VALID_NAME=false
+    while [ "$VALID_NAME" = false ]; do
+      RESERVED_FOUND=false
+      for word in $USER_PROJECT_NAME; do
+        if check_reserved "$word"; then
+          print_error "'$word' is a reserved word and cannot be used in the project name"
+          RESERVED_FOUND=true
+          break
+        fi
+      done
+
+      if [ "$RESERVED_FOUND" = true ]; then
+        read -p "Enter a different project name: " USER_PROJECT_NAME
+        USER_PROJECT_NAME=${USER_PROJECT_NAME:-Base Demo}
+      else
+        VALID_NAME=true
+      fi
+    done
+
+    PROJECT_NAME="$USER_PROJECT_NAME"
+    # Generate identifier from name (alphanumeric and underscores only)
+    PROJECT_IDENTIFIER=$(echo "$PROJECT_NAME" | sed 's/[^a-zA-Z0-9]/_/g' | sed 's/__*/_/g' | sed 's/^_//' | sed 's/_$//')
+    print_status "Project name set to: $PROJECT_NAME"
+    print_info "Project identifier: $PROJECT_IDENTIFIER"
+    echo ""
+  fi
 
   print_info "Checking Docker Hub authentication..."
 
@@ -646,9 +1007,29 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
       print_info "Logging in to Docker Hub as $DOCKER_USERNAME..."
     fi
 
-    # Attempt Docker login and capture any errors
-    LOGIN_OUTPUT=$(echo "$DOCKER_LOGIN_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1)
+    # Verify we have a password to use
+    if [ -z "$DOCKER_LOGIN_PASSWORD" ]; then
+      print_error "Docker password is empty - cannot log in"
+      echo ""
+      read -sp "Enter your Docker Hub password/PAT: " DOCKER_LOGIN_PASSWORD
+      echo ""
+    fi
+
+    # Attempt Docker login
+    set +e
+    LOGIN_OUTPUT=$(printf '%s' "$DOCKER_LOGIN_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1)
     LOGIN_EXIT_CODE=$?
+    set -e
+
+    # Retry on network timeout (Docker daemon may need a moment after fresh start)
+    if [ $LOGIN_EXIT_CODE -ne 0 ] && echo "$LOGIN_OUTPUT" | grep -q "Client.Timeout exceeded\|connection timed out\|connection refused"; then
+      print_info "Docker daemon may still be initializing, retrying login in 5 seconds..."
+      sleep 5
+      set +e
+      LOGIN_OUTPUT=$(printf '%s' "$DOCKER_LOGIN_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1)
+      LOGIN_EXIT_CODE=$?
+      set -e
+    fi
 
     if [ $LOGIN_EXIT_CODE -eq 0 ]; then
       print_status "Successfully logged in to Docker Hub"
@@ -674,15 +1055,41 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
 
         # Retry Docker login
         print_info "Retrying Docker login..."
-        if echo "$DOCKER_LOGIN_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1; then
+        set +e
+        LOGIN_OUTPUT=$(printf '%s' "$DOCKER_LOGIN_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin 2>&1)
+        LOGIN_EXIT_CODE=$?
+        set -e
+
+        if [ $LOGIN_EXIT_CODE -eq 0 ]; then
           print_status "Successfully logged in to Docker Hub"
         else
           print_error "Docker login failed. Please check your credentials."
           exit 1
         fi
       else
-        print_error "Docker login failed: $LOGIN_OUTPUT"
-        print_error "Please check your credentials and try again."
+        # Distinguish between network and authentication errors
+        if echo "$LOGIN_OUTPUT" | grep -q "Client.Timeout exceeded\|connection timed out\|connection refused\|network\|dial"; then
+          print_error "Docker login failed: Network connectivity issue"
+          echo ""
+          echo "$LOGIN_OUTPUT"
+          echo ""
+          print_info "Possible causes:"
+          print_info "  - Docker daemon not fully ready (wait a moment and retry)"
+          print_info "  - Network connectivity issues"
+          print_info "  - Firewall blocking Docker Hub access"
+          echo ""
+          print_info "Try rerunning: ./start-demo.sh"
+        elif echo "$LOGIN_OUTPUT" | grep -q "unauthorized\|incorrect\|denied"; then
+          print_error "Docker login failed: Invalid credentials"
+          echo ""
+          echo "$LOGIN_OUTPUT"
+          echo ""
+          print_info "Please verify your Docker Hub username and password/PAT"
+          print_info "Delete .demo-config and re-run to enter new credentials"
+        else
+          print_error "Docker login failed: $LOGIN_OUTPUT"
+          print_error "Please check your credentials and try again."
+        fi
         exit 1
       fi
     fi
@@ -698,160 +1105,95 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
     fi
   fi
 
-  # Detect architecture
-  ARCH=$(uname -m)
-  BUILD_PLATFORM=""
+  # Show Docker daemon architecture (with Colima x86_64 mode, this should be amd64)
+  DOCKER_ARCH=$(docker info --format '{{.Architecture}}' 2>/dev/null || echo 'unknown')
+  print_info "Docker daemon architecture: $DOCKER_ARCH"
 
-  if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
-    print_info "Detected Apple Silicon (ARM64) - building for amd64 (Harness Cloud compatibility)"
-    BUILD_PLATFORM="linux/amd64"
-    BUILD_CMD="docker buildx build --platform $BUILD_PLATFORM"
-    PUSH_FLAG="--push"
-  else
-    print_info "Detected Intel/AMD architecture - building natively"
-    BUILD_CMD="docker build"
-    PUSH_FLAG=""
-  fi
-
-  # Build backend image
-  print_info "Building backend Docker image (this may take a few minutes)..."
-  cd backend
-  if [ -n "$PUSH_FLAG" ]; then
-    # Use buildx with --push for ARM64
-    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:backend-latest" $PUSH_FLAG . --quiet; then
-      print_status "Backend image built and pushed: $DOCKER_USERNAME/harness-demo:backend-latest"
-    else
-      print_error "Docker buildx failed"
-      cd ..
-      exit 1
-    fi
-  else
-    # Regular build for Intel/AMD
-    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:backend-latest" . --quiet; then
-      print_status "Backend image built: $DOCKER_USERNAME/harness-demo:backend-latest"
-
-      # Push backend image separately for Intel/AMD
-      print_info "Pushing backend image to Docker Hub..."
-      if docker push "$DOCKER_USERNAME/harness-demo:backend-latest" --quiet; then
-        print_status "Backend image pushed to Docker Hub"
-      else
-        print_error "Docker push failed"
-        echo ""
-        echo "Common causes:"
-        echo "  1. Repository doesn't exist - Create 'harness-demo' at https://hub.docker.com/repository/create"
-        echo "  2. Authentication failed - Your credentials may be invalid"
-        echo "  3. No push access - Check repository permissions"
-        echo ""
-        echo "To fix:"
-        echo "  • Go to https://hub.docker.com/repository/create"
-        echo "  • Create a repository named: harness-demo"
-        echo "  • Make it public or private (your choice)"
-        echo "  • Then re-run: ./start-demo.sh"
-        echo ""
-        cd ..
-        exit 1
-      fi
-    else
-      print_error "Docker build failed"
-      cd ..
-      exit 1
-    fi
-  fi
-  cd ..
-
-  # Build test image for Test Intelligence
-  print_info "Building test Docker image for Harness Test Intelligence..."
-  cd python-tests
-  if [ -n "$PUSH_FLAG" ]; then
-    # Use buildx with --push for ARM64
-    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:test-latest" $PUSH_FLAG . --quiet; then
-      print_status "Test image built and pushed: $DOCKER_USERNAME/harness-demo:test-latest"
-    else
-      print_error "Test image buildx failed"
-      cd ..
-      exit 1
-    fi
-  else
-    # Regular build for Intel/AMD
-    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:test-latest" . --quiet; then
-      print_status "Test image built: $DOCKER_USERNAME/harness-demo:test-latest"
-
-      # Push test image
-      print_info "Pushing test image to Docker Hub..."
-      if docker push "$DOCKER_USERNAME/harness-demo:test-latest" --quiet; then
-        print_status "Test image pushed to Docker Hub"
-      else
-        print_error "Test image push failed (this is not critical, continuing...)"
-      fi
-    else
-      print_error "Test image build failed (this is not critical, continuing...)"
-    fi
-  fi
-  cd ..
-
-  # Build documentation image
-  print_info "Building documentation Docker image..."
+  # Prepare documentation files before parallel builds
+  print_info "Preparing documentation for build..."
 
   # Copy images into markdown directory for Docker build context
   if [ -d "images" ]; then
     cp -r images markdown/ 2>/dev/null || true
   fi
 
-  # Replace dockerhubaccountid placeholder with actual username in markdown files
-  print_info "Personalizing lab documentation with your Docker Hub username..."
+  # Replace placeholders with actual values in markdown files
+  print_info "Personalizing lab documentation..."
   echo ""
-  echo "   The lab guides will show '$DOCKER_USERNAME/harness-demo' instead of 'dockerhubaccountid/harness-demo'"
-  echo "   This makes the instructions easier to follow with your actual Docker Hub account."
+  echo "   Replacing 'dockerhubaccountid' with '$DOCKER_USERNAME'"
+  echo "   Replacing 'Base Demo' with '$PROJECT_NAME'"
+  echo "   This makes the instructions easier to follow with your actual configuration."
   echo ""
   if command -v sed &> /dev/null; then
-    # Create temporary copies with placeholder replaced
     for mdfile in markdown/*.md; do
       if [ -f "$mdfile" ]; then
-        # Use different sed syntax for macOS vs Linux
         if [[ "$OSTYPE" == "darwin"* ]]; then
           sed -i '.bak' "s/dockerhubaccountid/$DOCKER_USERNAME/g" "$mdfile"
           rm -f "${mdfile}.bak"
+          if [ "$PROJECT_NAME" != "Base Demo" ]; then
+            sed -i '.bak' "s/Base Demo/$PROJECT_NAME/g" "$mdfile"
+            rm -f "${mdfile}.bak"
+            sed -i '.bak' "s/Base_Demo/$PROJECT_IDENTIFIER/g" "$mdfile"
+            rm -f "${mdfile}.bak"
+          fi
         else
           sed -i "s/dockerhubaccountid/$DOCKER_USERNAME/g" "$mdfile"
+          if [ "$PROJECT_NAME" != "Base Demo" ]; then
+            sed -i "s/Base Demo/$PROJECT_NAME/g" "$mdfile"
+            sed -i "s/Base_Demo/$PROJECT_IDENTIFIER/g" "$mdfile"
+          fi
         fi
       fi
     done
     print_status "Documentation personalized successfully"
   fi
 
-  cd markdown
-  if [ -n "$PUSH_FLAG" ]; then
-    # Use buildx with --push for ARM64
-    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:docs-latest" $PUSH_FLAG . --quiet; then
-      print_status "Documentation image built and pushed: $DOCKER_USERNAME/harness-demo:docs-latest"
-    else
-      print_error "Documentation buildx failed (this is not critical, continuing...)"
-    fi
-  else
-    # Regular build for Intel/AMD
-    if $BUILD_CMD -t "$DOCKER_USERNAME/harness-demo:docs-latest" . --quiet; then
-      print_status "Documentation image built: $DOCKER_USERNAME/harness-demo:docs-latest"
+  # ============================================================
+  # SEQUENTIAL DOCKER BUILDS - Build images one at a time
+  # ============================================================
+  print_section "Building Docker Images"
+  echo ""
+  print_info "Building 3 images: backend, test, docs"
+  echo ""
 
-      # Push documentation image
-      print_info "Pushing documentation image to Docker Hub..."
-      if docker push "$DOCKER_USERNAME/harness-demo:docs-latest" --quiet; then
-        print_status "Documentation image pushed to Docker Hub"
-      else
-        print_error "Documentation push failed (this is not critical, continuing...)"
-      fi
-    else
-      print_error "Documentation Docker build failed (this is not critical, continuing...)"
-    fi
+  BUILD_FAILED=false
+
+  # Build backend image
+  print_info "Building backend image..."
+  cd backend
+  if docker build -t "$DOCKER_USERNAME/harness-demo:backend-latest" . && docker push "$DOCKER_USERNAME/harness-demo:backend-latest"; then
+    print_status "Backend image built and pushed: $DOCKER_USERNAME/harness-demo:backend-latest"
+  else
+    print_error "Backend image build/push failed"
+    BUILD_FAILED=true
+  fi
+  cd ..
+
+  # Build test image
+  print_info "Building test image..."
+  cd python-tests
+  if docker build -t "$DOCKER_USERNAME/harness-demo:test-latest" . && docker push "$DOCKER_USERNAME/harness-demo:test-latest"; then
+    print_status "Test image built and pushed: $DOCKER_USERNAME/harness-demo:test-latest"
+  else
+    print_error "Test image build/push failed (non-critical)"
+  fi
+  cd ..
+
+  # Build docs image
+  print_info "Building docs image..."
+  cd markdown
+  if docker build -t "$DOCKER_USERNAME/harness-demo:docs-latest" . && docker push "$DOCKER_USERNAME/harness-demo:docs-latest"; then
+    print_status "Docs image built and pushed: $DOCKER_USERNAME/harness-demo:docs-latest"
+  else
+    print_error "Docs image build/push failed (non-critical)"
   fi
   cd ..
 
   # Restore original markdown files (undo personalization to keep git clean)
   print_info "Restoring original documentation files..."
   if command -v git &> /dev/null && git rev-parse --git-dir > /dev/null 2>&1; then
-    # Use git to restore original files
     git checkout -- markdown/*.md 2>/dev/null || true
   else
-    # Fallback: manually restore using sed
     for mdfile in markdown/*.md; do
       if [ -f "$mdfile" ]; then
         if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -862,6 +1204,17 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
         fi
       fi
     done
+  fi
+
+  # Exit if backend build failed (critical)
+  if [ "$BUILD_FAILED" = true ]; then
+    echo ""
+    echo "To fix Docker push issues:"
+    echo "  • Go to https://hub.docker.com/repository/create"
+    echo "  • Create a repository named: harness-demo"
+    echo "  • Make it public or private (your choice)"
+    echo "  • Then re-run: ./start-demo.sh"
+    exit 1
   fi
 
   # Now create/update Docker Hub secret with authenticated credentials
@@ -888,28 +1241,26 @@ if [ "$SKIP_DOCKER_BUILD" = false ]; then
       print_error "Failed to create Docker Hub secret in default namespace"
     fi
 
-    # Create secret in harness-delegate-ng namespace (if it exists)
-    if kubectl get namespace harness-delegate-ng &> /dev/null; then
-      if kubectl get secret dockerhub-pull -n harness-delegate-ng &> /dev/null; then
-        kubectl delete secret dockerhub-pull -n harness-delegate-ng &> /dev/null
-      fi
+    # Create secret in harness-delegate-ng namespace
+    if kubectl get secret dockerhub-pull -n harness-delegate-ng &> /dev/null; then
+      kubectl delete secret dockerhub-pull -n harness-delegate-ng &> /dev/null
+    fi
 
-      kubectl create secret docker-registry dockerhub-pull \
-        --docker-server=https://index.docker.io/v1/ \
-        --docker-username="$DOCKER_USERNAME" \
-        --docker-password="$DOCKER_LOGIN_PASSWORD" \
-        --docker-email="${DOCKER_USERNAME}@example.com" \
-        -n harness-delegate-ng &> /dev/null
+    kubectl create secret docker-registry dockerhub-pull \
+      --docker-server=https://index.docker.io/v1/ \
+      --docker-username="$DOCKER_USERNAME" \
+      --docker-password="$DOCKER_LOGIN_PASSWORD" \
+      --docker-email="${DOCKER_USERNAME}@example.com" \
+      -n harness-delegate-ng &> /dev/null
 
-      if [ $? -eq 0 ]; then
-        print_status "Docker Hub secret created/updated in harness-delegate-ng namespace"
+    if [ $? -eq 0 ]; then
+      print_status "Docker Hub secret created/updated in harness-delegate-ng namespace"
 
-        # Attach secret to default service account
-        kubectl patch serviceaccount default -n harness-delegate-ng -p '{"imagePullSecrets": [{"name": "dockerhub-pull"}]}' &> /dev/null
-        print_status "Attached secret to service account in harness-delegate-ng"
-      else
-        print_error "Failed to create Docker Hub secret in harness-delegate-ng namespace"
-      fi
+      # Attach secret to default service account
+      kubectl patch serviceaccount default -n harness-delegate-ng -p '{"imagePullSecrets": [{"name": "dockerhub-pull"}]}' &> /dev/null
+      print_status "Attached secret to service account in harness-delegate-ng"
+    else
+      print_error "Failed to create Docker Hub secret in harness-delegate-ng namespace"
     fi
 
     # Attach secret to default service account in default namespace
@@ -926,6 +1277,40 @@ if [ "$SKIP_TERRAFORM" = false ]; then
 
   # Configuration file
   CONFIG_FILE=".demo-config"
+
+  # Start terraform/tofu init early in background (if no state file and only one IaC tool is installed)
+  # This runs while user enters credentials, saving time
+  # Note: If both terraform and tofu are installed, we skip early init since we need to ask user which to use
+  EARLY_TF_INIT_PID=""
+  if [ ! -f "kit/terraform.tfstate" ] || [ ! -s "kit/terraform.tfstate" ]; then
+    # Detect IaC tools
+    HAS_TF_EARLY=false
+    HAS_TOFU_EARLY=false
+    if command -v terraform &> /dev/null; then HAS_TF_EARLY=true; fi
+    if command -v tofu &> /dev/null; then HAS_TOFU_EARLY=true; fi
+
+    # Only start early init if exactly one tool is available (not both)
+    if [ "$HAS_TF_EARLY" = true ] && [ "$HAS_TOFU_EARLY" = false ]; then
+      IAC_CMD="terraform"
+      print_info "Starting terraform init in background (parallel with credential collection)..."
+      (
+        cd kit
+        terraform init > "$TEMP_DIR/terraform_init.log" 2>&1
+        echo $? > "$TEMP_DIR/terraform_init.exit"
+      ) &
+      EARLY_TF_INIT_PID=$!
+    elif [ "$HAS_TOFU_EARLY" = true ] && [ "$HAS_TF_EARLY" = false ]; then
+      IAC_CMD="tofu"
+      print_info "Starting tofu init in background (parallel with credential collection)..."
+      (
+        cd kit
+        tofu init > "$TEMP_DIR/terraform_init.log" 2>&1
+        echo $? > "$TEMP_DIR/terraform_init.exit"
+      ) &
+      EARLY_TF_INIT_PID=$!
+    fi
+    # If both are installed, don't start early init - wait for user choice
+  fi
 
   # Collect required variables (or load from cache)
   HARNESS_ACCOUNT_ID=""
@@ -1028,12 +1413,150 @@ if [ "$SKIP_TERRAFORM" = false ]; then
     print_status "Using cached Docker Hub password/PAT for Terraform"
   fi
 
+  # Get Harness Project Name (may already be set from Docker build section)
+  # Only reset if not already set
+  if [ -z "$PROJECT_NAME" ]; then
+    PROJECT_NAME=""
+    PROJECT_IDENTIFIER=""
+  fi
+
+  # Reserved words that cannot be used as project names (Harness API restrictions)
+  RESERVED_WORDS="project org account pipeline service environment connector secret template infrastructure delegate trigger artifact manifest variable input output stage step group"
+
+  # Function to check if a word is reserved
+  is_reserved_word() {
+    local word=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+    for reserved in $RESERVED_WORDS; do
+      if [ "$word" = "$reserved" ]; then
+        return 0  # true - is reserved
+      fi
+    done
+    return 1  # false - not reserved
+  }
+
+  # Function to convert project name to identifier (alphanumeric and underscores only)
+  name_to_identifier() {
+    echo "$1" | sed 's/[^a-zA-Z0-9]/_/g' | sed 's/__*/_/g' | sed 's/^_//' | sed 's/_$//'
+  }
+
+  # Function to check if a project already exists in Harness
+  project_exists() {
+    local identifier="$1"
+    local response
+    local http_code
+
+    # Make API call to check if project exists
+    response=$(curl -s -w "\n%{http_code}" -X GET \
+      "https://app.harness.io/ng/api/projects/${identifier}?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default" \
+      -H "x-api-key: ${HARNESS_PAT}" \
+      -H "Content-Type: application/json" 2>/dev/null)
+
+    http_code=$(echo "$response" | tail -n 1)
+
+    if [ "$http_code" = "200" ]; then
+      return 0  # true - project exists
+    else
+      return 1  # false - project doesn't exist (404 or other error)
+    fi
+  }
+
+  # Track if project name was set from Docker build section (custom name)
+  PROJECT_FROM_DOCKER_BUILD=false
+  if [ -n "$PROJECT_NAME" ] && [ "$PROJECT_NAME" != "Base Demo" ]; then
+    PROJECT_FROM_DOCKER_BUILD=true
+  fi
+
+  # Try to get from config file if not already set
+  if [ -z "$PROJECT_NAME" ] || [ "$PROJECT_NAME" = "Base Demo" ]; then
+    if [ -f "$CONFIG_FILE" ]; then
+      CACHED_PROJECT=$(grep "PROJECT_NAME=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2-)
+      CACHED_IDENTIFIER=$(grep "PROJECT_IDENTIFIER=" "$CONFIG_FILE" 2>/dev/null | cut -d'=' -f2)
+      if [ -n "$CACHED_PROJECT" ] && [ "$CACHED_PROJECT" != "Base Demo" ]; then
+        PROJECT_NAME="$CACHED_PROJECT"
+        PROJECT_IDENTIFIER="$CACHED_IDENTIFIER"
+        print_status "Using cached project name: $PROJECT_NAME"
+      fi
+    fi
+  fi
+
+  # Try to get from se-parms.tfvars if still not found
+  if [ -z "$PROJECT_NAME" ] || [ "$PROJECT_NAME" = "Base Demo" ]; then
+    if [ -f "kit/se-parms.tfvars" ]; then
+      TF_PROJECT=$(grep 'project_name' kit/se-parms.tfvars 2>/dev/null | cut -d'"' -f2)
+      TF_IDENTIFIER=$(grep 'project_identifier' kit/se-parms.tfvars 2>/dev/null | cut -d'"' -f2)
+      if [ -n "$TF_PROJECT" ] && [ "$TF_PROJECT" != "Base Demo" ]; then
+        PROJECT_NAME="$TF_PROJECT"
+        PROJECT_IDENTIFIER="$TF_IDENTIFIER"
+        print_status "Using project name from tfvars: $PROJECT_NAME"
+      fi
+    fi
+  fi
+
+  # Prompt for project name if still using default
+  if [ -z "$PROJECT_NAME" ] || [ "$PROJECT_NAME" = "Base Demo" ]; then
+    echo ""
+    echo "Choose a name for your Harness project"
+    echo "This will be displayed in the Harness UI (e.g., 'Partner Workshop', 'ACME Demo')"
+    echo ""
+    echo "Note: Cannot use reserved words like: project, org, account, pipeline, service, etc."
+    echo ""
+    read -p "Enter your Harness Project name [Base Demo]: " PROJECT_NAME
+
+    # Default to "Base Demo" if empty
+    PROJECT_NAME=${PROJECT_NAME:-Base Demo}
+  fi
+
+  # Validate project name and check existence
+  # Always do existence check (even for names from cache/config) for first-time Terraform apply
+  VALID_NAME=false
+  while [ "$VALID_NAME" = false ]; do
+    # Check for reserved words (check each word in the project name)
+    RESERVED_FOUND=false
+    for word in $PROJECT_NAME; do
+      if is_reserved_word "$word"; then
+        print_error "'$word' is a reserved word and cannot be used in the project name"
+        RESERVED_FOUND=true
+        break
+      fi
+    done
+
+    if [ "$RESERVED_FOUND" = true ]; then
+      read -p "Enter a different project name: " PROJECT_NAME
+      PROJECT_NAME=${PROJECT_NAME:-Base Demo}
+      continue
+    fi
+
+    # Generate identifier from name
+    PROJECT_IDENTIFIER=$(name_to_identifier "$PROJECT_NAME")
+
+    # Check if project already exists in Harness (only if Terraform state doesn't exist)
+    # If state exists, we're updating an existing project, not creating a new one
+    if [ ! -f "kit/terraform.tfstate" ] || [ ! -s "kit/terraform.tfstate" ]; then
+      print_info "Checking if project '$PROJECT_NAME' already exists..."
+      if project_exists "$PROJECT_IDENTIFIER"; then
+        print_error "A project with identifier '$PROJECT_IDENTIFIER' already exists in your Harness account"
+        print_info "Please choose a different project name"
+        echo ""
+        read -p "Enter a different project name: " PROJECT_NAME
+        PROJECT_NAME=${PROJECT_NAME:-Base Demo}
+        continue
+      fi
+    fi
+
+    VALID_NAME=true
+  done
+
+  print_status "Project name: $PROJECT_NAME"
+  print_info "Project identifier: $PROJECT_IDENTIFIER"
+
   # Save configuration for future runs
   {
     echo "DOCKER_USERNAME=$DOCKER_USERNAME"
     echo "HARNESS_ACCOUNT_ID=$HARNESS_ACCOUNT_ID"
     echo "HARNESS_PAT=$HARNESS_PAT"
     echo "DOCKER_PAT=$DOCKER_PAT"
+    echo "PROJECT_NAME=$PROJECT_NAME"
+    echo "PROJECT_IDENTIFIER=$PROJECT_IDENTIFIER"
   } > "$CONFIG_FILE"
   print_status "Saved credentials to $CONFIG_FILE for future runs"
   echo ""
@@ -1045,66 +1568,162 @@ account_id = "$HARNESS_ACCOUNT_ID"
 
 docker_username = "$DOCKER_USERNAME"
 DOCKER_PAT = "$DOCKER_PAT"
+
+project_name = "$PROJECT_NAME"
+project_identifier = "$PROJECT_IDENTIFIER"
 EOF
   print_status "Updated se-parms.tfvars with your configuration"
 
   # Check if Terraform has already been applied
+  RUN_TERRAFORM=true
   if [ -f "kit/terraform.tfstate" ] && [ -s "kit/terraform.tfstate" ]; then
     echo ""
-    print_status "IaC state already exists - Harness resources appear to be configured"
-    print_info "To reconfigure, delete kit/terraform.tfstate or run: cd kit && terraform destroy"
+    print_info "IaC state file exists from a previous run"
     echo ""
-  else
+    echo "Options:"
+    echo "  1) Skip Terraform - assume Harness resources already exist"
+    echo "  2) Re-run Terraform - recreate/update Harness resources"
+    echo ""
+    read -p "Choose [1/2] (default: 2 - re-run): " STATE_CHOICE
+    STATE_CHOICE=${STATE_CHOICE:-2}
 
-    # Check for Terraform
-    print_section "Checking for Terraform"
+    if [ "$STATE_CHOICE" = "1" ]; then
+      print_info "Skipping Terraform - using existing Harness resources"
+      RUN_TERRAFORM=false
+    else
+      print_info "Will re-run Terraform to ensure resources are configured"
+    fi
+    echo ""
+  fi
 
-    if ! command -v terraform &> /dev/null; then
-      print_error "Terraform is not installed"
+  if [ "$RUN_TERRAFORM" = "true" ]; then
+
+    # Check for Terraform or OpenTofu
+    print_section "Checking for Terraform/OpenTofu"
+
+    # Detect available IaC tools
+    HAS_TERRAFORM=false
+    HAS_TOFU=false
+
+    if command -v terraform &> /dev/null; then
+      HAS_TERRAFORM=true
+    fi
+    if command -v tofu &> /dev/null; then
+      HAS_TOFU=true
+    fi
+
+    # Handle based on what's available
+    if [ "$HAS_TERRAFORM" = true ] && [ "$HAS_TOFU" = true ]; then
+      # Both installed - ask user which to use
+      print_status "Found Terraform: $(terraform version | head -n1)"
+      print_status "Found OpenTofu: $(tofu version | head -n1)"
       echo ""
-      echo "This demo requires Terraform to provision Harness resources."
+      echo "Both Terraform and OpenTofu are installed."
+      echo ""
+      read -p "Which would you like to use? [terraform/tofu] (default: terraform): " IAC_CHOICE
+      IAC_CHOICE=${IAC_CHOICE:-terraform}
+
+      case "$IAC_CHOICE" in
+        tofu|opentofu|OpenTofu)
+          IAC_CMD="tofu"
+          print_status "Using OpenTofu"
+          ;;
+        *)
+          IAC_CMD="terraform"
+          print_status "Using Terraform"
+          ;;
+      esac
+    elif [ "$HAS_TERRAFORM" = true ]; then
+      IAC_CMD="terraform"
+      print_status "Found Terraform: $(terraform version | head -n1)"
+    elif [ "$HAS_TOFU" = true ]; then
+      IAC_CMD="tofu"
+      print_status "Found OpenTofu: $(tofu version | head -n1)"
+    else
+      print_error "Neither Terraform nor OpenTofu is installed"
+      echo ""
+      echo "This demo requires Terraform or OpenTofu to provision Harness resources."
       echo ""
       echo "Installation options:"
       echo ""
-      echo "Visit: https://www.terraform.io/downloads"
+      echo "Terraform: https://www.terraform.io/downloads"
+      echo "OpenTofu:  https://opentofu.org/docs/intro/install/"
       echo ""
       cd ..
       exit 1
     fi
 
-    print_status "Found Terraform: $(terraform version | head -n1)"
-
-    # Run Terraform
-    print_section "Running Terraform"
+    # Run Terraform/OpenTofu
+    print_section "Running $IAC_CMD"
 
     cd kit
 
-    # Initialize
-    print_info "Running terraform init..."
-    if terraform init &> /dev/null; then
-      print_status "Terraform initialized"
+    # Check if early init was started, otherwise start it now
+    if [ -n "$EARLY_TF_INIT_PID" ]; then
+      TERRAFORM_INIT_PID=$EARLY_TF_INIT_PID
+      print_info "$IAC_CMD init was started earlier (parallel with credential collection)"
     else
-      print_error "Terraform init failed"
+      # Start init now
+      print_info "Starting $IAC_CMD init..."
+      (
+        $IAC_CMD init > "$TEMP_DIR/terraform_init.log" 2>&1
+        echo $? > "$TEMP_DIR/terraform_init.exit"
+      ) &
+      TERRAFORM_INIT_PID=$!
+    fi
+
+    # Wait for init to complete (should already be done or nearly done)
+    print_info "Waiting for $IAC_CMD init to complete..."
+    if wait_with_spinner $TERRAFORM_INIT_PID "Initializing $IAC_CMD providers..."; then
+      INIT_EXIT=$(cat "$TEMP_DIR/terraform_init.exit" 2>/dev/null || echo "1")
+      if [ "$INIT_EXIT" = "0" ]; then
+        print_status "$IAC_CMD initialized"
+      else
+        print_error "$IAC_CMD init failed"
+        cat "$TEMP_DIR/terraform_init.log" 2>/dev/null | tail -10
+        cd ..
+        exit 1
+      fi
+    else
+      print_error "$IAC_CMD init failed"
+      cat "$TEMP_DIR/terraform_init.log" 2>/dev/null | tail -10
       cd ..
       exit 1
     fi
 
     # Plan
-    print_info "Running terraform plan (this may take 1-2 minutes)..."
-    if terraform plan -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan &> /dev/null; then
-      print_status "Terraform plan created"
+    print_info "Running $IAC_CMD plan..."
+    (
+      $IAC_CMD plan -var="pat=$HARNESS_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan > "$TEMP_DIR/terraform_plan.log" 2>&1
+      echo $? > "$TEMP_DIR/terraform_plan.exit"
+    ) &
+    PLAN_PID=$!
+
+    if wait_with_spinner $PLAN_PID "Creating $IAC_CMD plan (1-2 minutes)..."; then
+      PLAN_EXIT=$(cat "$TEMP_DIR/terraform_plan.exit" 2>/dev/null || echo "1")
+      if [ "$PLAN_EXIT" = "0" ]; then
+        print_status "$IAC_CMD plan created"
+      else
+        print_error "$IAC_CMD plan failed"
+        echo ""
+        cat "$TEMP_DIR/terraform_plan.log" 2>/dev/null | tail -20
+        echo ""
+        print_info "Run manually to see full errors: cd kit && $IAC_CMD plan -var=\"pat=\$HARNESS_PAT\" -var-file=\"se-parms.tfvars\""
+        cd ..
+        exit 1
+      fi
     else
-      print_error "Terraform plan failed. Run manually to see errors: cd kit && terraform plan -var=\"pat=$HARNESS_PAT\" -var-file=\"se-parms.tfvars\""
+      print_error "$IAC_CMD plan failed"
       cd ..
       exit 1
     fi
 
-    # Apply
-    print_info "Running terraform apply (this may take 3-5 minutes)..."
-    if terraform apply -auto-approve plan.tfplan; then
-      print_status "Terraform apply completed - Harness resources created!"
+    # Apply (show output for visibility)
+    print_info "Running $IAC_CMD apply (this may take 3-5 minutes)..."
+    if $IAC_CMD apply -auto-approve plan.tfplan; then
+      print_status "$IAC_CMD apply completed - Harness resources created!"
     else
-      print_error "Terraform apply failed"
+      print_error "$IAC_CMD apply failed"
       cd ..
       exit 1
     fi
@@ -1116,6 +1735,40 @@ else
   print_info "Skipping Terraform setup (--skip-terraform flag used)"
 fi
 
+# Check if Prometheus background deployment completed (if we started one)
+if [ -n "$PROMETHEUS_PID" ]; then
+  print_section "Waiting for Background Tasks"
+
+  # Check if Prometheus deployment is still running
+  if kill -0 $PROMETHEUS_PID 2>/dev/null; then
+    print_info "Waiting for Prometheus deployment to complete..."
+    wait_with_spinner $PROMETHEUS_PID "Deploying Prometheus..."
+  fi
+
+  # Check result
+  if [ -f "$TEMP_DIR/prometheus_status" ]; then
+    PROM_STATUS=$(cat "$TEMP_DIR/prometheus_status")
+    case "$PROM_STATUS" in
+      "DEPLOYED")
+        print_status "Prometheus deployed successfully"
+        ;;
+      "REDEPLOYED")
+        print_status "Prometheus redeployed successfully"
+        ;;
+      *)
+        print_status "Prometheus deployment completed"
+        ;;
+    esac
+  else
+    # Check if Prometheus is actually running
+    if kubectl get pods -n monitoring -l app=prometheus 2>/dev/null | grep -q "Running"; then
+      print_status "Prometheus is running"
+    else
+      print_error "Prometheus may have failed to deploy. Check: kubectl get pods -n monitoring"
+    fi
+  fi
+fi
+
 # Display status
 print_section "Infrastructure Status"
 
@@ -1125,7 +1778,7 @@ kubectl get nodes
 
 echo ""
 echo "Prometheus Status:"
-kubectl get pods -n monitoring
+kubectl get pods -n monitoring 2>/dev/null || echo "  (monitoring namespace not found)"
 
 if [ "$K8S_TYPE" = "minikube" ]; then
   echo ""
@@ -1183,7 +1836,7 @@ elif [ -f "kit/terraform.tfstate" ] && [ -s "kit/terraform.tfstate" ]; then
   echo "     http://localhost:30001"
   echo ""
   echo "  2. Navigate to Harness UI: https://app.harness.io"
-  echo "  3. Select the 'Base Demo' project"
+  echo "  3. Select the '$PROJECT_NAME' project"
   echo "  4. Configure Harness Code Repository:"
   echo "     - Go to Code Repository module"
   echo "     - Click 'partner_demo_kit' repository"

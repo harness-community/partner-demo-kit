@@ -6,7 +6,7 @@ This repository is your complete training environment for mastering Harness demo
 
 Built from our Unscripted conference workshop materials, this hands-on training culminates in a **customer pitch recording** where you demonstrate your ability to sell Harness to prospective clients.
 
-All demo resources are created in a Harness project called **"Base Demo"** to keep demo activities segregated from production environments.
+All demo resources are created in a dedicated Harness project (default: **"Base Demo"**, customizable during setup) to keep demo activities segregated from other projects. Please note that if you using a partner licensed Harness instance, it will be important to name your project something other than the default as other colleagues may have already created a project named "Base Demo".
 
 ## Training Objectives
 
@@ -38,7 +38,7 @@ This training consists of four progressive sections:
 - **Self-Contained**: All necessary components included (Terraform configs, sample application code)
 - **Customizable**: Use as a foundation for building customer-specific demonstrations
 - **Field-Tested**: Based on materials from Harness Unscripted workshops
-- **Project Segregation**: All resources created in dedicated "Base Demo" project
+- **Project Segregation**: All resources created in a dedicated project (customizable name)
 
 ## What This Demo Showcases
 
@@ -48,6 +48,16 @@ This training consists of four progressive sections:
 4. **Continuous Verification** - Automated deployment validation using Prometheus metrics
 5. **Security Testing** - Available with licensed partner organization
 6. **Policy Enforcement (OPA)** - Available with licensed partner organization
+
+## Architecture Overview
+
+![Harness Partner Demo Kit Architecture](markdown/images/kit-architecture.jpg)
+
+The demo kit consists of:
+- **Harness Manager (SaaS)** - CI/CD pipelines, connectors, and built-in features (Harness Cloud, Code Repository, Artifact Registry)
+- **Local Machine** - Kubernetes cluster (Colima/Rancher/minikube/Docker Desktop) running the delegate, lab documentation, and demo applications
+- **Docker Hub** - Container image storage with authentication via Harness Platform
+- **Local Browser** - Access documentation at localhost:30001 and the demo app at localhost:8080
 
 ## Infrastructure Requirements
 
@@ -69,6 +79,8 @@ This training consists of four progressive sections:
   - **macOS (Intel)**: Choose one - [minikube](https://minikube.sigs.k8s.io/docs/start/), [Colima](https://github.com/abiosoft/colima), [Docker Desktop](https://www.docker.com/products/docker-desktop), or [Rancher Desktop](https://rancherdesktop.io/)
   - **Windows**: [minikube](https://minikube.sigs.k8s.io/docs/start/) (recommended), [Docker Desktop](https://www.docker.com/products/docker-desktop), or [Rancher Desktop](https://rancherdesktop.io/)
   - **Linux**: [minikube](https://minikube.sigs.k8s.io/docs/start/) or your preferred K8s distribution
+- **Minimum Cluster Resources**: 4 CPU cores and 8GB memory
+  - The `start-demo.sh` script validates cluster resources and provides remediation guidance if insufficient
 - **kubectl**: Kubernetes CLI (usually included with above tools)
 - **Helm**: Kubernetes package manager
 - **Terraform**: Infrastructure as Code tool (v1.0+)
@@ -85,10 +97,40 @@ This training consists of four progressive sections:
   - Generate a Personal Access Token (Settings > Security > Personal Access Tokens)
 
 ### System Requirements
-- **CPU**: 4+ cores recommended
-- **RAM**: 8GB minimum, 16GB recommended
-- **Disk**: 20GB free space
-- **OS**: macOS, Linux, or Windows (with WSL2 or Git Bash)
+
+#### Supported Operating Systems
+
+| OS | Version | Architecture | Kubernetes Option | Notes |
+|----|---------|--------------|-------------------|-------|
+| **macOS** | 12.0+ (Monterey) | Apple Silicon (M1/M2/M3/M4) | Colima (**required**) | Uses Rosetta 2 for AMD64 emulation |
+| **macOS** | 12.0+ (Monterey) | Intel | Colima, minikube, Docker Desktop, Rancher Desktop | Any K8s option works |
+| **Linux** | Ubuntu 20.04+, Debian 11+, Fedora 36+ | x86_64 | minikube, Docker Desktop, Rancher Desktop | Native AMD64, no emulation needed |
+| **Windows** | 10 (Build 19041+), 11 | x86_64 | minikube, Docker Desktop, Rancher Desktop | Requires WSL2 or Git Bash for scripts |
+
+#### Hardware Requirements
+
+| Resource | Minimum | Recommended | Notes |
+|----------|---------|-------------|-------|
+| **CPU** | 4 cores | 6+ cores | Required for Kubernetes cluster + builds |
+| **RAM** | 8 GB | 16 GB | K8s cluster needs 4-8GB allocation |
+| **Disk** | 20 GB free | 40 GB free | Docker images + K8s storage |
+
+#### Platform-Specific Notes
+
+**🍎 Apple Silicon (M1/M2/M3/M4):**
+- Colima with Rosetta 2 is **required** for AMD64 emulation (Harness Cloud builds AMD64 images)
+- Docker Desktop also works but Colima is recommended for better resource efficiency
+- First Colima startup takes 5-10 minutes to download AMD64 base images
+
+**🐧 Linux:**
+- Any modern distribution with Docker support works
+- minikube is the simplest option for most users
+- Ensure your user is in the `docker` group: `sudo usermod -aG docker $USER`
+
+**🪟 Windows:**
+- WSL2 or Git Bash required to run the setup scripts (bash)
+- Docker Desktop with WSL2 backend recommended
+- See "Windows Users - Important Setup Notes" below for detailed setup
 
 ### Windows Users - Important Setup Notes
 
@@ -161,7 +203,7 @@ Once the startup script completes, access the demo at these URLs:
 |---------|-----|-------------|
 | **Lab Documentation** | http://localhost:30001 | Interactive lab guides for the demo walkthrough |
 | **Demo Application** | http://localhost:8080 | Frontend web application (after deployment) |
-| **Harness UI** | https://app.harness.io | Harness platform - select "Base Demo" project |
+| **Harness UI** | https://app.harness.io | Harness platform - select your demo project |
 
 **Recommended Setup**: Use Chrome's **split tab view** (or two browser windows side-by-side) with:
 - **Left side**: Harness UI at https://app.harness.io
@@ -189,11 +231,12 @@ The `start-demo.sh` script automates the **complete demo setup** from local infr
   - Other platforms: Flexible (minikube, Colima, Docker Desktop, Rancher Desktop)
 - Automatically starts Colima/minikube if needed
 - Verifies cluster architecture (ensures AMD64 for Apple Silicon)
+- **Validates cluster resources** (minimum 4 CPU cores, 8GB memory) with remediation guidance
 
-**3. Prometheus Deployment**
+**3. Prometheus Deployment** (Background)
 - Creates monitoring namespace if it doesn't exist
-- Deploys Prometheus for continuous verification metrics
-- Waits for Prometheus to be ready
+- **Deploys Prometheus in background** (non-blocking - runs while Docker builds)
+- Verifies Prometheus status at end of script
 
 **4. Docker Hub Authentication** (Smart Detection)
 - **If already logged in** (via Docker Desktop): Uses existing credentials automatically
@@ -204,10 +247,12 @@ The `start-demo.sh` script automates the **complete demo setup** from local infr
 - Saves your username to `.demo-config` for future runs
 - Prompts for login with helpful instructions about using a Personal Access Token (PAT)
 
-**5. Backend Image Build & Push**
-- Builds the Django backend Docker image
+**5. Docker Image Builds** (Parallel!)
+- **Builds all three images simultaneously** (backend, test, docs) in parallel
+- Progress tracking shows status of each build in real-time
 - Pushes to your Docker Hub repository
 - Provides clear error messages if build or push fails
+- **Saves 2-4 minutes** vs sequential builds
 
 **6. Harness Configuration & IaC Provisioning** (Automated!)
 - **Smart credential collection**: Reuses values from previous runs or prompts for:
@@ -240,13 +285,15 @@ The `start-demo.sh` script automates the **complete demo setup** from local infr
 
 **First Run (Complete Setup):**
 - Prompts for:
+  - **Project name** (default: "Base Demo") - customizable name for your Harness project
   - Docker Hub username (unless already logged in via Docker Desktop)
   - Docker Hub password/PAT
   - Harness Account ID
   - Harness Personal Access Token (PAT)
+- Validates project name doesn't use reserved words or conflict with existing projects
 - Saves all credentials to `.demo-config` for future runs
 - Creates Harness resources via Terraform
-- Takes ~8-12 minutes total (including Docker build and IaC provisioning)
+- Takes ~6-10 minutes total (parallel Docker builds + IaC provisioning)
 
 **Subsequent Runs:**
 - Detects existing state file and skips Harness resource creation
@@ -257,6 +304,7 @@ The `start-demo.sh` script automates the **complete demo setup** from local infr
 ### Credential Management
 
 The script stores credentials in `.demo-config` (git-ignored) for convenience:
+- **Project name & identifier** - Your custom Harness project name
 - **Docker Hub username** - Reused for subsequent runs
 - **Harness Account ID** - Saved to avoid re-entering
 - **Harness PAT** - Cached for convenience (can also use `DEMO_BASE_PAT` env var)
@@ -296,7 +344,7 @@ When you run `./stop-demo.sh` without arguments, you'll see a user-friendly menu
    - Preserves Harness resources for next time
 
 4. **Full cleanup (delete all Harness resources)**
-   - Deletes Harness 'Base Demo' project
+   - Deletes your Harness demo project
    - Deletes Docker Hub repository
    - Removes Prometheus
    - Keeps cluster running and config files
@@ -315,7 +363,7 @@ When you run `./stop-demo.sh` without arguments, you'll see a user-friendly menu
 For automated/scripted use:
 - `./stop-demo.sh --delete-prometheus` - Also remove Prometheus monitoring
 - `./stop-demo.sh --stop-cluster` - Also stop Kubernetes cluster (Colima or minikube)
-- `./stop-demo.sh --delete-harness-project` - Delete Harness "Base Demo" project via API
+- `./stop-demo.sh --delete-harness-project` - Delete your Harness demo project via API
 - `./stop-demo.sh --delete-docker-repo` - Delete Docker Hub harness-demo repository via API
 - `./stop-demo.sh --delete-config-files` - Delete .demo-config, se-parms.tfvars, and IaC state files
 - `./stop-demo.sh --full-cleanup` - Complete cleanup (all of the above except config files)
@@ -334,7 +382,7 @@ To restart the demo later without recreating Harness resources:
 ```
 
 > **Next Steps**: After running `start-demo.sh` successfully:
-> 1. Navigate to [app.harness.io](https://app.harness.io) and select the **"Base Demo"** project
+> 1. Navigate to [app.harness.io](https://app.harness.io) and select your demo project
 > 2. Configure Harness Code Repository (see Step 8 in Manual Setup below)
 > 3. Follow the lab guides in the [markdown/](markdown/) directory
 
@@ -491,6 +539,8 @@ cd ../kit
 account_id = "your-harness-account-id"
 docker_username = "your-dockerhub-username"
 DOCKER_PAT = "your-dockerhub-pat"
+project_name = "Base Demo"
+project_identifier = "Base_Demo"
 ```
 
 **Important**: Also update `dockerhubaccountid` in [kit/main.tf](kit/main.tf) (line ~300) with your Docker Hub username.
@@ -516,8 +566,8 @@ terraform plan -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars" -out=plan.t
 terraform apply -auto-approve plan.tfplan
 ```
 
-**What Gets Created** (all in "Base Demo" project):
-- Harness project "Base Demo"
+**What Gets Created** (all in your demo project):
+- Harness project (your custom name, default: "Base Demo")
 - Kubernetes connector (workshop_k8s)
 - Docker Hub connector (workshopdocker)
 - Prometheus connector
@@ -532,7 +582,7 @@ terraform apply -auto-approve plan.tfplan
 ### Step 8: Configure Harness Code Repository
 
 1. Navigate to Harness UI > **Code Repository** module
-2. Select **"Base Demo"** project
+2. Select your demo project
 3. Click on **"partner_demo_kit"** repository
 4. Click **"Clone"** (top right) > **"+Generate Clone Credential"**
 5. Save the generated username and token
@@ -688,7 +738,7 @@ To start fresh and reset everything, you have several options:
 ```
 
 This single command will:
-- Delete the Harness "Base Demo" project via API (with confirmation prompt)
+- Delete your Harness demo project via API (with confirmation prompt)
 - Delete the Docker Hub `harness-demo` repository via API (with confirmation prompt)
 - Delete configuration files (.demo-config, se-parms.tfvars, state files)
 - Remove Kubernetes deployments (frontend/backend)
@@ -732,7 +782,7 @@ kubectl delete namespace monitoring --ignore-not-found=true
 1. Navigate to Harness UI > **Code Repository** > Manage Repository
    - Delete **"partner_demo_kit"** repository
 2. Navigate to **Projects**
-   - Delete **"Base Demo"** project (this removes all project resources)
+   - Delete your demo project (this removes all project resources)
 
 **Step 3: Clean IaC State**
 

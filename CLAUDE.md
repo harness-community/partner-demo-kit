@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Harness.io Partner Demo Kit - a self-contained demonstration environment for showcasing Harness platform capabilities (CI/CD, Code Repository, Continuous Verification, Security Testing). The demo runs entirely on local infrastructure (Colima for Apple Silicon, minikube/Docker Desktop/Rancher Desktop for other platforms) to minimize external dependencies.
 
-**Important**: All Harness resources are created in a project called "Base Demo". This segregates demo resources from production environments.
+**Important**: All Harness resources are created in a dedicated project (customizable name, default: "Base Demo"). This segregates demo resources from production environments.
 
 ## Architecture
 
@@ -25,7 +25,7 @@ The repository contains three main components that work together:
 - **Structure**: Standard Django project with `backend/` (core) and `deploy/` (app) modules
 
 ### Infrastructure & Deployment
-- **Terraform configs**: [kit/](kit/) - Provisions Harness resources (connectors, environments, services, monitored services)
+- **Terraform/OpenTofu configs**: [kit/](kit/) - Provisions Harness resources (connectors, environments, services, monitored services)
 - **K8s manifests**: [harness-deploy/](harness-deploy/) - Deployment and service definitions for frontend and backend
 - **Monitoring**: Prometheus configuration at [kit/prometheus.yml](kit/prometheus.yml)
 
@@ -37,7 +37,7 @@ Once the demo is running, access the following URLs in your browser:
 |---------|-----|-------------|
 | **Lab Documentation** | http://localhost:30001 | Interactive lab guides for the demo walkthrough |
 | **Demo Application** | http://localhost:8080 | Frontend web application (after deployment) |
-| **Harness UI** | https://app.harness.io | Harness platform - select "Base Demo" project |
+| **Harness UI** | https://app.harness.io | Harness platform - select your demo project |
 
 **Recommended Setup**: Use Chrome's **split tab view** (or two browser windows side-by-side) with:
 - Left side: Harness UI at https://app.harness.io
@@ -138,22 +138,27 @@ chmod +x start-demo.sh stop-demo.sh
    - Apple Silicon Macs: Requires Colima with AMD64 emulation (Rosetta 2)
    - Windows: Recommends minikube (allows Docker Desktop/Rancher Desktop)
    - Other platforms: Flexible (minikube, Colima, Docker Desktop, Rancher Desktop)
-3. Checks prerequisites (Docker, kubectl, Terraform)
+3. Checks prerequisites (Docker, kubectl, Terraform/OpenTofu)
 4. Detects and starts Kubernetes (Colima/minikube) if needed
 5. **Verifies cluster architecture** (ensures AMD64 for Apple Silicon compatibility with Harness Cloud)
-6. **Creates Docker Hub secret** (`dockerhub-pull`) in Kubernetes for pulling Harness CI images
-7. Deploys Prometheus for continuous verification
-8. Authenticates to Docker Hub (smart detection of existing login)
-9. **Detects architecture** (Intel/AMD vs Apple Silicon) and builds Docker images with correct platform:
-   - Backend image (backend-latest)
-   - Test image (test-latest)
-   - Documentation image (docs-latest)
-7. **Updates Docker Hub secret** with authenticated credentials after login
-8. **Collects Harness credentials** (Account ID, PAT, Docker password)
-9. **Updates kit/se-parms.tfvars** automatically
-10. **Runs Terraform** (init, plan, apply) to create all Harness resources
-11. Saves configuration to `.demo-config` for subsequent runs
-12. Deploys documentation to Kubernetes at http://localhost:30001
+6. **Validates cluster resources** (minimum 4 CPU cores, 8GB memory) with remediation guidance
+7. **Creates Docker Hub secret** (`dockerhub-pull`) in Kubernetes for pulling Harness CI images
+8. **Deploys Prometheus in background** (non-blocking) for continuous verification
+9. Authenticates to Docker Hub (smart detection of existing login)
+10. **Builds Docker images in parallel** (backend, test, docs simultaneously) with progress tracking
+11. **Starts Terraform/OpenTofu init early** (runs in background while collecting credentials)
+12. **Updates Docker Hub secret** with authenticated credentials after login
+13. **Collects Harness credentials** (Account ID, PAT, Docker password)
+14. **Updates kit/se-parms.tfvars** automatically
+15. **Runs Terraform/OpenTofu** (plan, apply with spinners) to create all Harness resources
+16. Saves configuration to `.demo-config` for subsequent runs
+17. Deploys documentation to Kubernetes at http://localhost:30001
+
+**Performance Optimizations:**
+- Parallel Docker builds save 2-4 minutes vs sequential builds
+- Background Prometheus deployment runs while Docker builds
+- Early Terraform/OpenTofu init runs while collecting credentials
+- Progress spinners provide feedback during long operations
 
 **stop-demo.sh** - Interactive cleanup script with smart defaults:
 ```bash
@@ -171,7 +176,7 @@ chmod +x start-demo.sh stop-demo.sh
 # Command-line flags (skip interactive menu):
 ./stop-demo.sh --delete-prometheus      # Also remove Prometheus
 ./stop-demo.sh --stop-cluster           # Also stop Colima/minikube
-./stop-demo.sh --delete-harness-project # Delete Harness 'Base Demo' project
+./stop-demo.sh --delete-harness-project # Delete Harness demo project
 ./stop-demo.sh --delete-docker-repo     # Delete Docker Hub repository
 ./stop-demo.sh --full-cleanup           # Complete cleanup (keeps credentials)
 ./stop-demo.sh --no-interactive         # Skip menu, use minimal cleanup
@@ -188,7 +193,9 @@ chmod +x start-demo.sh stop-demo.sh
 - Supports environment variable `DEMO_BASE_PAT` for Harness PAT
 - Detects Docker Desktop login automatically
 
-### Terraform (Harness Resource Provisioning) - Manual Method
+### Terraform/OpenTofu (Harness Resource Provisioning) - Manual Method
+
+The demo supports both **Terraform** and **OpenTofu** for provisioning Harness resources. The IaC configuration files are fully compatible with both tools.
 
 **Important**: Set the Harness PAT as an environment variable on Mac/Linux:
 ```bash
@@ -200,14 +207,19 @@ export DEMO_BASE_PAT="pat.SAn9tg9eRrWyEJyLZ01ibw.xx"
 # Verify it's set correctly
 echo $DEMO_BASE_PAT
 
-# Run Terraform commands
+# Run with Terraform:
 terraform init
 terraform plan -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan
 terraform apply -auto-approve plan.tfplan
+
+# OR run with OpenTofu:
+tofu init
+tofu plan -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars" -out=plan.tfplan
+tofu apply -auto-approve plan.tfplan
 ```
 
-The IaC configuration creates a "Base Demo" project with:
-- Harness project "Base Demo"
+The IaC configuration creates a Harness project with configurable name (default: "Base Demo"):
+- Harness project (customizable via `project_name` and `project_identifier` variables)
 - K8s connector (`workshop_k8s`) - for local Kubernetes cluster (Colima/minikube/Rancher Desktop/Docker Desktop)
 - Docker connector (`workshopdocker`) - for Docker Hub
 - Prometheus connector - for continuous verification
@@ -332,6 +344,8 @@ Configure [kit/se-parms.tfvars](kit/se-parms.tfvars) with:
 - `account_id`: Your Harness account ID (found in URL when viewing your profile)
 - `docker_username`: Docker Hub username
 - `DOCKER_PAT`: Docker Hub password/PAT
+- `project_name`: Display name for your Harness project (default: "Base Demo")
+- `project_identifier`: Identifier for your project (alphanumeric + underscores, default: "Base_Demo")
 
 ### Environment Setup Requirements
 - Docker and Docker Hub account with `harness-demo` repository created
@@ -339,16 +353,17 @@ Configure [kit/se-parms.tfvars](kit/se-parms.tfvars) with:
   - **Apple Silicon Macs**: Colima with Rosetta 2 for AMD64 emulation (REQUIRED)
   - **Windows**: minikube (recommended), Docker Desktop, or Rancher Desktop
   - **Intel Mac/Linux**: minikube, Colima, Docker Desktop, or Rancher Desktop
-- **Terraform** - IaC tool for provisioning Harness resources
+- **Minimum Cluster Resources**: 4 CPU cores, 8GB memory (validated by start-demo.sh)
+- **Terraform or OpenTofu** - IaC tool for provisioning Harness resources
 - kubectl and helm
 - Harness account with CD, CI, and Code Repo modules enabled
 - Harness delegate installed at account level using Helm
 
 ### Harness Code Repository Git Credentials
 
-After Terraform creates the `partner_demo_kit` repository in Harness Code:
+After the IaC (Terraform/OpenTofu) creates the `partner_demo_kit` repository in Harness Code:
 
-1. Navigate to Harness UI > Code Repository module > "Base Demo" project
+1. Navigate to Harness UI > Code Repository module > your demo project
 2. Click on "partner_demo_kit" repository
 3. Click "Clone" button (top right) > "+Generate Clone Credential"
 4. Save the generated username and token
@@ -366,10 +381,10 @@ When cloning this repository locally for development:
 
 The complete demo workflow is documented in:
 1. [base-resources.txt](base-resources.txt) - Initial setup and resource provisioning
-2. [base-demo.txt](base-demo.txt) - Step-by-step demo execution guide (all in "Base Demo" project)
+2. [base-demo.txt](base-demo.txt) - Step-by-step demo execution guide (all in your demo project)
 3. [markdown/](markdown/) - Individual demo module guides (0-7) - originally for Instruqt workshops
 
-The demo demonstrates (all within "Base Demo" project):
+The demo demonstrates (all within your demo project):
 1. **Code Repository Secret Scanning** - Demonstrates blocking sensitive commits (TOKEN in backend/entrypoint.sh)
 2. **CI Pipeline** - Build stage with test intelligence, compile template, and Docker image push (uses **Harness Cloud** infrastructure)
 3. **Frontend Deployment** - Rolling deployment strategy to local K8s
@@ -389,12 +404,12 @@ The demo demonstrates (all within "Base Demo" project):
 
 To reset the demo environment and start fresh:
 
-**1. Harness Resources (in "Base Demo" project):**
+**1. Harness Resources (in your demo project):**
 ```
 - Navigate to Harness UI > Code Repo module > Manage Repository
   - Delete "partner_demo_kit" repository
 - Navigate to Harness UI > Projects
-  - Delete "Base Demo" project (this removes all project resources)
+  - Delete your demo project (this removes all project resources)
 ```
 
 **2. Local IaC State:**
@@ -402,8 +417,10 @@ To reset the demo environment and start fresh:
 cd kit
 git clean -dxf  # WARNING: Removes all untracked files including .tfstate files
 
-# OR manually destroy with Terraform first:
+# OR manually destroy with Terraform/OpenTofu first:
 terraform destroy -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars"
+# OR with OpenTofu:
+tofu destroy -var="pat=$DEMO_BASE_PAT" -var-file="se-parms.tfvars"
 ```
 
 **3. Docker Hub:**
@@ -442,4 +459,6 @@ This repository was originally created for Instruqt-based workshops. Key differe
 - **Added**: Git credential setup for Harness Code Repository
 - **Added**: Colima as primary option for macOS (especially Apple Silicon)
 - **Added**: Rancher Desktop and Docker Desktop as alternatives
-- **Clarified**: All resources go into "Base Demo" project for proper segregation
+- **Clarified**: All resources go into a dedicated demo project for proper segregation
+- **Added**: Customizable project name (prompted during start-demo.sh, with reserved word validation and existence check)
+- **Added**: OpenTofu support as alternative to Terraform (scripts auto-detect and prompt if both are installed)
