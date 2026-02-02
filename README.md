@@ -1,5 +1,9 @@
 # Harness Partner Demo Kit
 ## Partner Technical Sales Enablement Training
+Demo Kit for Partner SE Enablement.
+
+## Video
+Can watch [this video](https://www.youtube.com/watch?v=zDi5Nrj6_I4) that is the overall goal and how to execute this Partner Demo Kit. 
 
 ## Overview
 This repository is your complete training environment for mastering Harness demonstrations and sales enablement. Designed for both **potential partners** evaluating Harness partnership opportunities and **current partners** seeking sales engineering enablement training, this kit provides everything needed to deliver compelling Harness.io demonstrations using local resources, without requiring complex cloud infrastructure or specialized environments.
