@@ -31,7 +31,12 @@ Before starting, ensure you have:
 1. **Harness Account**
    - Free (or paid) Harness account with CI, CD, and Code Repository modules
    - Harness Account ID (found in your account profile URL)
-   - Harness Personal Access Token (PAT) with appropriate permissions
+   - **Harness API token** — required for `start-demo.sh` and cleanup:
+     1. Profile (bottom-left) → **My API Keys & Tokens**
+     2. Create an API key if needed (**+ API Key**)
+     3. Click **+ Token** on that key (the key alone is not a usable token)
+     4. Copy the `pat.*` value immediately — shown only once
+     5. Permissions: All resources / All scopes
 
 2. **Local Environment**
    - Docker Engine running
@@ -62,8 +67,10 @@ chmod +x start-demo.sh
 
 The script will prompt you for:
 - Harness Account ID
-- Harness Personal Access Token (PAT)
+- Harness API token (`pat.*` from **+ Token** under your API key)
 - Docker Hub username and password
+
+> **Important**: Creating an API key is not enough — you must click **+ Token** on the key and copy the token value. If you only see an API key with no tokens listed under it, setup and cleanup will fail with authentication errors.
 
 > **Tip**: The script saves your configuration to `.demo-config` for future runs, so you won't need to re-enter credentials.
 
@@ -245,6 +252,18 @@ Test that the delegate can access your local Kubernetes cluster:
 3. Ensure Docker Engine is running
 4. Verify Kubernetes cluster is accessible: `kubectl cluster-info`
 5. Re-run the script after fixing issues: `./start-demo.sh`
+
+### Harness API Token Invalid or Missing
+
+**Symptoms:** Terraform fails with `401 Unauthorized`, cleanup reports project deleted but it still exists, or scripts say "Token is not valid"
+
+**Common cause:** You created an API key but did not click **+ Token** under it. The screenshot in Harness will show your key (e.g. `partner-kit-key`) with a **+ Token** link and no tokens listed.
+
+**Fix:**
+1. Profile → **My API Keys & Tokens** → your key → **+ Token**
+2. Copy the new `pat.*` value
+3. Run: `export DEMO_BASE_PAT="pat.xxx"` then `./start-demo.sh` or `./stop-demo.sh --force-api-delete`
+4. Or delete `.demo-config` and re-run `./start-demo.sh` to enter fresh credentials
 
 ### Can't Find "Base Demo" Project
 

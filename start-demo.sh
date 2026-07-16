@@ -123,6 +123,73 @@ print_section() {
   echo "----------------------------------------"
 }
 
+print_harness_pat_instructions() {
+  echo ""
+  echo "You need a Harness API token (used by Terraform and cleanup scripts)."
+  echo ""
+  echo "Create one in the Harness UI:"
+  echo "  1. Click your profile (bottom-left) > My API Keys & Tokens"
+  echo "  2. Under My API Keys, open your key (or click + API Key to create one)"
+  echo "  3. Click + Token on that key — creating an API key alone is not enough"
+  echo "  4. Set permissions to All resources / All scopes (or Admin/API access)"
+  echo "  5. Copy the token immediately — it is shown only once and starts with pat."
+  echo ""
+  echo "Optional: export DEMO_BASE_PAT=\"pat.xxx\" before running this script."
+  echo ""
+}
+
+validate_harness_pat() {
+  local pat="$1"
+  local account_id="$2"
+
+  if [ -z "$pat" ] || [ -z "$account_id" ]; then
+    return 1
+  fi
+
+  local http_code
+  http_code=$(curl -s -o /dev/null -w "%{http_code}" -X GET \
+    "https://app.harness.io/ng/api/user/currentUser?accountIdentifier=${account_id}" \
+    -H "x-api-key: ${pat}" \
+    -H "Content-Type: application/json" 2>/dev/null)
+
+  [ "$http_code" = "200" ]
+}
+
+prompt_for_harness_pat() {
+  while true; do
+    print_harness_pat_instructions
+    read -p "Enter your Harness PAT: " HARNESS_PAT
+
+    if [ -z "$HARNESS_PAT" ]; then
+      print_error "PAT cannot be empty"
+      continue
+    fi
+
+    print_info "Validating Harness PAT..."
+    if validate_harness_pat "$HARNESS_PAT" "$HARNESS_ACCOUNT_ID"; then
+      print_status "Harness PAT validated"
+      return 0
+    fi
+
+    print_error "That token is not valid for account ${HARNESS_ACCOUNT_ID}"
+    print_info "Common causes: token expired/revoked, or you created an API key but not a + Token under it"
+  done
+}
+
+ensure_valid_harness_pat() {
+  local source_label="$1"
+
+  print_info "Validating Harness PAT from ${source_label}..."
+  if validate_harness_pat "$HARNESS_PAT" "$HARNESS_ACCOUNT_ID"; then
+    print_status "Harness PAT validated"
+    return 0
+  fi
+
+  print_error "Harness PAT from ${source_label} is invalid or expired"
+  print_info "Generate a new token: Profile > My API Keys & Tokens > your key > + Token"
+  prompt_for_harness_pat
+}
+
 # Check Kubernetes cluster resources (CPU and memory)
 check_cluster_resources() {
   print_section "Checking Cluster Resources"
@@ -1356,6 +1423,7 @@ if [ "$SKIP_TERRAFORM" = false ]; then
   if [ -n "$DEMO_BASE_PAT" ]; then
     HARNESS_PAT="$DEMO_BASE_PAT"
     print_status "Using Harness PAT from DEMO_BASE_PAT environment variable"
+    ensure_valid_harness_pat "DEMO_BASE_PAT"
   else
     # Try to get from config file
     if [ -f "$CONFIG_FILE" ]; then
@@ -1364,19 +1432,10 @@ if [ "$SKIP_TERRAFORM" = false ]; then
 
     # Prompt if not found
     if [ -z "$HARNESS_PAT" ]; then
-      echo ""
-      echo "You need a Harness Personal Access Token (PAT)"
-      echo "To create one: Profile > My API Keys & Tokens > + New Token"
-      echo "Token permissions needed: All resources, all scopes"
-      echo ""
-      read -p "Enter your Harness PAT: " HARNESS_PAT
-
-      while [ -z "$HARNESS_PAT" ]; do
-        print_error "PAT cannot be empty"
-        read -p "Enter your Harness PAT: " HARNESS_PAT
-      done
+      prompt_for_harness_pat
     else
       print_status "Using cached Harness PAT"
+      ensure_valid_harness_pat ".demo-config"
     fi
   fi
 

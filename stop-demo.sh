@@ -318,6 +318,119 @@ DOCKER_USERNAME=""
 DOCKER_PAT=""
 PROJECT_NAME=""
 PROJECT_IDENTIFIER=""
+HARNESS_DELETE_SUCCESS=false
+
+# Delete Harness project via API; returns 0 on success, 1 on failure
+delete_harness_project_via_api() {
+  if [ -z "$HARNESS_ACCOUNT_ID" ] || [ -z "$HARNESS_PAT" ] || [ -z "$PROJECT_IDENTIFIER" ]; then
+    print_error "Missing required credentials for API call"
+    print_info "HARNESS_ACCOUNT_ID: $([ -n "$HARNESS_ACCOUNT_ID" ] && echo "set" || echo "NOT SET")"
+    print_info "HARNESS_PAT: $([ -n "$HARNESS_PAT" ] && echo "set (${#HARNESS_PAT} chars)" || echo "NOT SET")"
+    print_info "PROJECT_IDENTIFIER: $([ -n "$PROJECT_IDENTIFIER" ] && echo "set ($PROJECT_IDENTIFIER)" || echo "NOT SET")"
+    return 1
+  fi
+
+  print_info "Account: ${HARNESS_ACCOUNT_ID}"
+  print_info "Org: default"
+  print_info "Project: $PROJECT_IDENTIFIER"
+  echo ""
+  print_info "Deleting '$PROJECT_NAME' project via API..."
+
+  PROJECT_DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
+    "https://app.harness.io/ng/api/projects/${PROJECT_IDENTIFIER}?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default" \
+    -H "x-api-key: ${HARNESS_PAT}" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json" 2>&1)
+
+  PROJECT_HTTP_CODE=$(echo "$PROJECT_DELETE_RESPONSE" | tail -n 1)
+  PROJECT_RESPONSE_BODY=$(echo "$PROJECT_DELETE_RESPONSE" | sed '$d')
+
+  echo ""
+  echo "HTTP Status Code: $PROJECT_HTTP_CODE"
+
+  if [ "$PROJECT_HTTP_CODE" = "200" ] || [ "$PROJECT_HTTP_CODE" = "204" ]; then
+    print_status "$PROJECT_NAME project deleted successfully"
+    HARNESS_DELETE_SUCCESS=true
+    return 0
+  elif [ "$PROJECT_HTTP_CODE" = "404" ]; then
+    print_info "Project not found (already deleted)"
+    HARNESS_DELETE_SUCCESS=true
+    return 0
+  elif [ "$PROJECT_HTTP_CODE" = "401" ]; then
+    print_error "Failed to delete project: Harness PAT is invalid or expired (HTTP 401)"
+    print_info "Create a token: Profile > My API Keys & Tokens > your key > + Token"
+    print_info "An API key alone is not enough — you must generate a token under the key"
+    print_info "Then run: export DEMO_BASE_PAT=\"pat.xxx\" && ./stop-demo.sh --force-api-delete"
+    return 1
+  else
+    print_error "Failed to delete project (HTTP $PROJECT_HTTP_CODE)"
+    if [ -n "$PROJECT_RESPONSE_BODY" ]; then
+      echo ""
+      echo "API Response Body:"
+      echo "----------------------------------------"
+      echo "$PROJECT_RESPONSE_BODY" | head -n 5
+      echo "----------------------------------------"
+    fi
+    print_info "Manual deletion: Harness UI > Projects > $PROJECT_NAME > ⋮ > Delete Project"
+    return 1
+  fi
+}
+
+print_harness_pat_instructions() {
+  echo ""
+  echo "Create a Harness API token in the UI:"
+  echo "  1. Profile (bottom-left) > My API Keys & Tokens"
+  echo "  2. Open your API key (or create one with + API Key)"
+  echo "  3. Click + Token on that key — the key alone is not a usable token"
+  echo "  4. Copy the pat.* value immediately (shown only once)"
+  echo ""
+}
+
+validate_harness_pat() {
+  if [ -z "$HARNESS_PAT" ] || [ -z "$HARNESS_ACCOUNT_ID" ]; then
+    return 1
+  fi
+
+  local http_code
+  http_code=$(curl -s -o /dev/null -w "%{http_code}" -X GET \
+    "https://app.harness.io/ng/api/user/currentUser?accountIdentifier=${HARNESS_ACCOUNT_ID}" \
+    -H "x-api-key: ${HARNESS_PAT}" \
+    -H "Content-Type: application/json" 2>/dev/null)
+
+  [ "$http_code" = "200" ]
+}
+
+ensure_valid_harness_pat_for_cleanup() {
+  if validate_harness_pat; then
+    return 0
+  fi
+
+  print_error "Harness PAT is invalid or expired — project deletion will fail until you update it"
+  print_harness_pat_instructions
+
+  if [ "$NO_INTERACTIVE" = true ]; then
+    print_info "Re-run with a fresh token: export DEMO_BASE_PAT=\"pat.xxx\" && ./stop-demo.sh --force-api-delete"
+    return 1
+  fi
+
+  read -sp "Enter a fresh Harness PAT (or press Enter to skip deletion): " NEW_PAT
+  echo ""
+  if [ -z "$NEW_PAT" ]; then
+    print_info "Skipping Harness project deletion (no valid PAT provided)"
+    DELETE_HARNESS_PROJECT=false
+    return 1
+  fi
+
+  HARNESS_PAT="$NEW_PAT"
+  if validate_harness_pat; then
+    print_status "Harness PAT validated"
+    return 0
+  fi
+
+  print_error "That token is still not valid"
+  DELETE_HARNESS_PROJECT=false
+  return 1
+}
 
 if [ -f "$CONFIG_FILE" ]; then
   print_info "Loading credentials from $CONFIG_FILE..."
@@ -605,6 +718,8 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
     HARNESS_PAT="${DEMO_BASE_PAT}"
   fi
 
+  ensure_valid_harness_pat_for_cleanup || true
+
   # Check if IaC state file exists
   if [ ! -f "kit/terraform.tfstate" ] || [ ! -s "kit/terraform.tfstate" ]; then
     print_info "No Terraform state file found"
@@ -612,36 +727,10 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
     echo ""
 
     # Try API deletion directly (no terraform)
-    if [ -n "$HARNESS_ACCOUNT_ID" ] && [ -n "$HARNESS_PAT" ]; then
-      print_info "Account: ${HARNESS_ACCOUNT_ID}"
-      print_info "Project: $PROJECT_IDENTIFIER"
-      echo ""
-
-      print_info "Deleting '$PROJECT_NAME' project via API..."
-      PROJECT_DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
-        "https://app.harness.io/ng/api/projects/${PROJECT_IDENTIFIER}?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default" \
-        -H "x-api-key: ${HARNESS_PAT}" \
-        -H "Content-Type: application/json" 2>&1)
-
-      PROJECT_HTTP_CODE=$(echo "$PROJECT_DELETE_RESPONSE" | tail -n 1)
-      PROJECT_RESPONSE_BODY=$(echo "$PROJECT_DELETE_RESPONSE" | head -n -1)
-
-      echo "HTTP Status Code: $PROJECT_HTTP_CODE"
-      echo ""
-
-      if [ "$PROJECT_HTTP_CODE" = "200" ] || [ "$PROJECT_HTTP_CODE" = "204" ]; then
-        print_status "$PROJECT_NAME project deleted successfully"
-      elif [ "$PROJECT_HTTP_CODE" = "404" ]; then
-        print_info "Project not found (already deleted)"
-      else
-        print_error "Failed to delete project (HTTP $PROJECT_HTTP_CODE)"
-        if [ -n "$PROJECT_RESPONSE_BODY" ]; then
-          echo "API Response: $PROJECT_RESPONSE_BODY" | head -n 3
-        fi
-      fi
+    if delete_harness_project_via_api; then
+      :
     else
-      print_error "Missing credentials (HARNESS_ACCOUNT_ID or HARNESS_PAT)"
-      print_info "Cannot delete project without credentials"
+      print_info "Cannot delete project without valid credentials"
     fi
   else
     # We have a state file, use IaC to destroy
@@ -810,8 +899,11 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
               if $IAC_CMD destroy -var="pat=$HARNESS_PAT" $TFVARS_ARG -auto-approve; then
                 print_status "Harness resources destroyed successfully via $IAC_CMD"
                 TERRAFORM_SUCCESS=true
+                HARNESS_DELETE_SUCCESS=true
               else
                 print_error "$IAC_CMD destroy encountered errors"
+                print_info "If you see 401 Unauthorized, your Harness PAT may be expired."
+                print_info "Generate a new PAT and run: export DEMO_BASE_PAT=\"pat.xxx\" && ./stop-demo.sh --force-api-delete"
                 print_info "Some resources may have been deleted. Check kit/terraform.tfstate"
                 print_info ""
 
@@ -829,73 +921,8 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
                 # Accept y/Y/yes as confirmation
                 if [[ "$DELETE_PROJECT_API" =~ ^[Yy]([Ee][Ss])?$ ]]; then
                   print_section "Deleting Project via Harness API"
-
-                  # Verify we have the required credentials
-                  if [ -z "$HARNESS_ACCOUNT_ID" ] || [ -z "$HARNESS_PAT" ] || [ -z "$PROJECT_IDENTIFIER" ]; then
-                    print_error "Missing required credentials for API call"
-                    print_info "HARNESS_ACCOUNT_ID: $([ -n "$HARNESS_ACCOUNT_ID" ] && echo "set" || echo "NOT SET")"
-                    print_info "HARNESS_PAT: $([ -n "$HARNESS_PAT" ] && echo "set (${#HARNESS_PAT} chars)" || echo "NOT SET")"
-                    print_info "PROJECT_IDENTIFIER: $([ -n "$PROJECT_IDENTIFIER" ] && echo "set ($PROJECT_IDENTIFIER)" || echo "NOT SET")"
-                    echo ""
-                    print_info "Manual deletion required via Harness UI:"
-                    print_info "  1. Navigate to: Projects > $PROJECT_NAME"
-                    print_info "  2. Click the three dots (⋮) menu"
-                    print_info "  3. Select 'Delete Project'"
-                    print_info "  4. Confirm deletion"
-                    cd ..
-                    exit 1
-                  fi
-
-                  print_info "Account: ${HARNESS_ACCOUNT_ID}"
-                  print_info "Org: default"
-                  print_info "Project: $PROJECT_IDENTIFIER"
-                  echo ""
-
-                  print_info "Deleting '$PROJECT_NAME' project (cascade delete all resources)..."
-
-                  # Delete the entire project with verbose output
-                  PROJECT_DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
-                    "https://app.harness.io/ng/api/projects/${PROJECT_IDENTIFIER}?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default" \
-                    -H "x-api-key: ${HARNESS_PAT}" \
-                    -H "Content-Type: application/json" \
-                    -H "Accept: application/json" 2>&1)
-
-                  PROJECT_HTTP_CODE=$(echo "$PROJECT_DELETE_RESPONSE" | tail -n 1)
-                  # Use sed to remove last line (BSD head doesn't support -n -1)
-                  PROJECT_RESPONSE_BODY=$(echo "$PROJECT_DELETE_RESPONSE" | sed '$d')
-
-                  echo ""
-                  echo "HTTP Status Code: $PROJECT_HTTP_CODE"
-
-                  if [ "$PROJECT_HTTP_CODE" = "200" ] || [ "$PROJECT_HTTP_CODE" = "204" ]; then
-                    print_status "$PROJECT_NAME project deleted successfully"
-                    echo ""
-                    echo "Project and all its resources have been deleted:"
-                    echo "  - Services"
-                    echo "  - Environments"
-                    echo "  - Pipelines"
-                    echo "  - Connectors"
-                    echo "  - Monitored services"
-                    echo "  - All other project resources"
+                  if delete_harness_project_via_api; then
                     TERRAFORM_SUCCESS=true
-                  elif [ "$PROJECT_HTTP_CODE" = "404" ]; then
-                    print_info "Project not found (already deleted)"
-                    TERRAFORM_SUCCESS=true
-                  else
-                    print_error "Failed to delete project (HTTP $PROJECT_HTTP_CODE)"
-                    echo ""
-                    if [ -n "$PROJECT_RESPONSE_BODY" ]; then
-                      echo "API Response Body:"
-                      echo "----------------------------------------"
-                      echo "$PROJECT_RESPONSE_BODY"
-                      echo "----------------------------------------"
-                    fi
-                    echo ""
-                    print_info "Manual deletion required via Harness UI:"
-                    print_info "  1. Navigate to: Projects > $PROJECT_NAME"
-                    print_info "  2. Click the three dots (⋮) menu"
-                    print_info "  3. Select 'Delete Project'"
-                    print_info "  4. Confirm deletion"
                   fi
                 else
                   print_info "Skipping API deletion"
@@ -913,73 +940,8 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
           # Handle force API delete or missing state scenarios
           if [ "$SKIP_TERRAFORM" = true ] && [ "$TERRAFORM_SUCCESS" = false ]; then
             print_section "Deleting Project via Harness API"
-
-            # Verify we have the required credentials
-            if [ -z "$HARNESS_ACCOUNT_ID" ] || [ -z "$HARNESS_PAT" ] || [ -z "$PROJECT_IDENTIFIER" ]; then
-              print_error "Missing required credentials for API call"
-              print_info "HARNESS_ACCOUNT_ID: $([ -n "$HARNESS_ACCOUNT_ID" ] && echo "set" || echo "NOT SET")"
-              print_info "HARNESS_PAT: $([ -n "$HARNESS_PAT" ] && echo "set (${#HARNESS_PAT} chars)" || echo "NOT SET")"
-              print_info "PROJECT_IDENTIFIER: $([ -n "$PROJECT_IDENTIFIER" ] && echo "set ($PROJECT_IDENTIFIER)" || echo "NOT SET")"
-              echo ""
-              print_info "Manual deletion required via Harness UI:"
-              print_info "  1. Navigate to: Projects > $PROJECT_NAME"
-              print_info "  2. Click the three dots (⋮) menu"
-              print_info "  3. Select 'Delete Project'"
-              print_info "  4. Confirm deletion"
-              cd ..
-              exit 1
-            fi
-
-            print_info "Account: ${HARNESS_ACCOUNT_ID}"
-            print_info "Org: default"
-            print_info "Project: $PROJECT_IDENTIFIER"
-            echo ""
-
-            print_info "Deleting '$PROJECT_NAME' project (cascade delete all resources)..."
-
-            # Delete the entire project with verbose output
-            PROJECT_DELETE_RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
-              "https://app.harness.io/ng/api/projects/${PROJECT_IDENTIFIER}?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=default" \
-              -H "x-api-key: ${HARNESS_PAT}" \
-              -H "Content-Type: application/json" \
-              -H "Accept: application/json" 2>&1)
-
-            PROJECT_HTTP_CODE=$(echo "$PROJECT_DELETE_RESPONSE" | tail -n 1)
-            # Use sed to remove last line (BSD head doesn't support -n -1)
-            PROJECT_RESPONSE_BODY=$(echo "$PROJECT_DELETE_RESPONSE" | sed '$d')
-
-            echo ""
-            echo "HTTP Status Code: $PROJECT_HTTP_CODE"
-
-            if [ "$PROJECT_HTTP_CODE" = "200" ] || [ "$PROJECT_HTTP_CODE" = "204" ]; then
-              print_status "$PROJECT_NAME project deleted successfully"
-              echo ""
-              echo "Project and all its resources have been deleted:"
-              echo "  - Services"
-              echo "  - Environments"
-              echo "  - Pipelines"
-              echo "  - Connectors"
-              echo "  - Monitored services"
-              echo "  - All other project resources"
+            if delete_harness_project_via_api; then
               TERRAFORM_SUCCESS=true
-            elif [ "$PROJECT_HTTP_CODE" = "404" ]; then
-              print_info "Project not found (already deleted)"
-              TERRAFORM_SUCCESS=true
-            else
-              print_error "Failed to delete project (HTTP $PROJECT_HTTP_CODE)"
-              echo ""
-              if [ -n "$PROJECT_RESPONSE_BODY" ]; then
-                echo "API Response Body:"
-                echo "----------------------------------------"
-                echo "$PROJECT_RESPONSE_BODY"
-                echo "----------------------------------------"
-              fi
-              echo ""
-              print_info "Manual deletion required via Harness UI:"
-              print_info "  1. Navigate to: Projects > $PROJECT_NAME"
-              print_info "  2. Click the three dots (⋮) menu"
-              print_info "  3. Select 'Delete Project'"
-              print_info "  4. Confirm deletion"
             fi
           fi
 
@@ -999,6 +961,12 @@ if [ "$DELETE_HARNESS_PROJECT" = true ]; then
     else
       print_info "Skipping Harness resource deletion (user cancelled)"
     fi
+  fi
+
+  if [ "$DELETE_HARNESS_PROJECT" = true ] && [ "$HARNESS_DELETE_SUCCESS" = false ]; then
+    echo ""
+    print_error "Harness project '$PROJECT_NAME' was NOT deleted"
+    print_info "The cleanup summary below reflects what was actually removed."
   fi
 fi
 
@@ -1247,8 +1215,10 @@ elif [ "$K8S_AVAILABLE" = true ]; then
   echo "  ⊘ Prometheus monitoring (still running)"
 fi
 
-if [ "$DELETE_HARNESS_PROJECT" = true ]; then
+if [ "$HARNESS_DELETE_SUCCESS" = true ]; then
   echo "  ✓ Harness '$PROJECT_NAME' project"
+elif [ "$DELETE_HARNESS_PROJECT" = true ]; then
+  echo "  ✗ Harness '$PROJECT_NAME' project (deletion failed — project still exists)"
 else
   echo "  ⊘ Harness project (still exists)"
 fi
@@ -1285,8 +1255,12 @@ if [ "$STOP_CLUSTER" = false ] && [ "$K8S_AVAILABLE" = true ]; then
   ANYTHING_REMAINS=true
 fi
 
-if [ "$DELETE_HARNESS_PROJECT" = false ]; then
-  echo "  • Harness '$PROJECT_NAME' project (manage via Harness UI or IaC)"
+if [ "$DELETE_HARNESS_PROJECT" = false ] || [ "$HARNESS_DELETE_SUCCESS" = false ]; then
+  if [ "$HARNESS_DELETE_SUCCESS" = false ] && [ "$DELETE_HARNESS_PROJECT" = true ]; then
+    echo "  • Harness '$PROJECT_NAME' project (deletion failed — delete manually or retry with a fresh PAT)"
+  else
+    echo "  • Harness '$PROJECT_NAME' project (manage via Harness UI or IaC)"
+  fi
   ANYTHING_REMAINS=true
 fi
 

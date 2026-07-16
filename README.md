@@ -77,7 +77,7 @@ The demo kit consists of:
   - **macOS (Apple Silicon M1/M2/M3/M4)**: [Colima](https://github.com/abiosoft/colima) (**REQUIRED** for AMD64 emulation via Rosetta 2)
     ```bash
     brew install colima docker kubectl qemu lima-additional-guestagents
-    colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes
+    colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker
     ```
     Note: First startup takes 5-10 minutes. Harness Cloud builds AMD64 images, so AMD64 emulation is required. The `start-demo.sh` script will detect missing dependencies and offer to install them automatically.
   - **macOS (Intel)**: Choose one - [minikube](https://minikube.sigs.k8s.io/docs/start/), [Colima](https://github.com/abiosoft/colima), [Docker Desktop](https://www.docker.com/products/docker-desktop), or [Rancher Desktop](https://rancherdesktop.io/)
@@ -96,6 +96,14 @@ The demo kit consists of:
   - Enable modules: CI (Continuous Integration), CD (Continuous Delivery), Code Repository
   - **Important**: Harness Cloud requires credit card verification (free tier available)
   - Add credit card in Account Settings > Billing to enable Harness Cloud for CI builds
+  - **Harness API token (required for setup and cleanup)** — create before running `start-demo.sh`:
+    1. Click your profile (bottom-left) → **My API Keys & Tokens**
+    2. Create an API key if needed (**+ API Key**), e.g. `partner-kit-key`
+    3. Click **+ Token** on that key — **an API key alone is not enough**; you need a token under it
+    4. Set permissions to **All resources / All scopes** (or Admin/API access)
+    5. Copy the token immediately — it starts with `pat.` and is shown only once
+    6. Paste it when `start-demo.sh` prompts, or set `export DEMO_BASE_PAT="pat.xxx"`
+  - **Updating your token**: If cleanup or Terraform fails with `401 Unauthorized`, generate a new **+ Token** and re-run with `export DEMO_BASE_PAT="pat.xxx"` or delete `.demo-config` to re-enter credentials
 - **Docker Hub Account**: Sign up at [hub.docker.com](https://hub.docker.com)
   - Create a repository named `harness-demo`
   - Generate a Personal Access Token (Settings > Security > Personal Access Tokens)
@@ -647,8 +655,23 @@ Follow the step-by-step lab guides in the `markdown/` directory which walk throu
 
 ### Common Issues
 
-**Issue**: Terraform fails with authentication error
-- **Solution**: Verify `DEMO_BASE_PAT` environment variable is set correctly: `echo $DEMO_BASE_PAT`
+**Issue**: Terraform fails with authentication error (`401 Unauthorized` / `INVALID_TOKEN`)
+- **Cause**: Missing, expired, or revoked Harness API token — or you created an API key but never clicked **+ Token** under it
+- **Solution**:
+  1. In Harness: Profile → **My API Keys & Tokens** → your key → **+ Token**
+  2. Copy the new `pat.*` value (shown only once)
+  3. Either export it: `export DEMO_BASE_PAT="pat.xxx"` and re-run the script
+  4. Or delete `.demo-config` and run `./start-demo.sh` again to re-enter credentials
+- **Note**: `start-demo.sh` and `stop-demo.sh` now validate cached tokens and will prompt for a fresh one if invalid
+
+**Issue**: Cleanup says Harness project was deleted, but it still exists in the UI
+- **Cause**: Usually an expired/invalid cached PAT in `.demo-config` — the old script reported intent, not actual success
+- **Solution**:
+  ```bash
+  export DEMO_BASE_PAT="pat.your-new-token"
+  ./stop-demo.sh --force-api-delete
+  ```
+  Or delete manually: Harness UI → Projects → your project → ⋮ → Delete Project
 
 **Issue**: Terraform not found
 - **Solution**: Install Terraform from https://www.terraform.io/downloads
@@ -663,10 +686,32 @@ Follow the step-by-step lab guides in the `markdown/` directory which walk throu
 - **Solution**: Install all required dependencies and start fresh:
   ```bash
   brew install colima docker kubectl qemu lima-additional-guestagents
-  colima stop
-  colima delete
-  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes
+  colima delete --data -f
+  colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker
   ```
+
+**Issue**: Colima fails during Kubernetes provisioning (k3s download error)
+- **Symptoms**: Errors like:
+  - `error provisioning kubernetes: error at 'downloading and installing'`
+  - `resolve redirect failed` or `EOF` when downloading from `github.com/k3s-io/k3s`
+- **Cause**: Transient network interruption, VPN/proxy interference, DNS issues, or stale Colima cache — not missing demo prerequisites
+- **Solution** (try in order):
+  1. **Retry with a clean reset** (fixes most cases):
+     ```bash
+     colima delete --data -f
+     colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker
+     ```
+  2. **Clear Colima cache** if retry alone fails:
+     ```bash
+     rm -rf ~/Library/Caches/colima/caches/*
+     colima delete --data -f
+     colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker
+     ```
+  3. **Pin a k3s version** if the default keeps failing:
+     ```bash
+     colima start --vm-type=vz --vz-rosetta --arch x86_64 --cpu 4 --memory 8 --kubernetes --runtime docker --kubernetes-version="v1.34.1+k3s1"
+     ```
+  4. **Check network/DNS** — disable VPN, try a different network, or switch DNS to a public resolver (e.g. `1.1.1.1` / `8.8.8.8`)
 
 **Issue**: Prometheus connector fails in Harness
 - **Solution**: Use ngrok to expose Prometheus and update the connector URL to the ngrok HTTPS URL
